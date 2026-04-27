@@ -12,8 +12,21 @@
   </head>
   <body>
     <main>
+      <aside class="start-pane" id="start-pane">
+        <button class="start-pane-toggle" id="start-pane-toggle" type="button" aria-label="toggle start pane">◀</button>
+        <div class="start-pane-content">
+          <h3>Start from</h3>
+          <ul class="start-list">
+            <li><button class="start-btn" data-preset="rod"       type="button">Rod</button></li>
+            <li><button class="start-btn" data-preset="rect"      type="button">Rectangle</button></li>
+            <li><button class="start-btn" data-preset="extrusion" type="button">Extrusion</button></li>
+          </ul>
+        </div>
+      </aside>
+
       <div class="canvas-wrap">
         <canvas id="cv" width="480" height="480"></canvas>
+        <form class="size-input-overlay" id="size-input" hidden></form>
       </div>
 
       <aside class="panel">
@@ -25,10 +38,6 @@
           <div class="ops-row">
             <button id="op-add-circle-hole" class="op-btn">− Circle hole</button>
             <button id="op-add-poly-hole" class="op-btn">− Polygon hole</button>
-          </div>
-          <div class="ops-row">
-            <button id="op-mode-disk" class="op-btn mode-btn">Reset to rod</button>
-            <button id="op-mode-poly" class="op-btn mode-btn">Reset to rect</button>
           </div>
         </section>
 

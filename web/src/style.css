@@ -11,13 +11,69 @@ body {
 
 main {
   display: grid;
-  grid-template-columns: minmax(320px, 1fr) 320px;
+  grid-template-columns: 200px minmax(320px, 1fr) 320px;
   gap: 24px;
   padding: 24px;
   align-items: start;
+  transition: grid-template-columns 0.25s ease;
+}
+main.start-collapsed {
+  grid-template-columns: 32px minmax(320px, 1fr) 320px;
 }
 
+.start-pane { position: relative; overflow: hidden; }
+.start-pane-toggle {
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--border, #ccc);
+  background: transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  padding: 0;
+}
+.start-pane-toggle:hover { background: rgba(127,127,127,0.08); }
+.start-pane-content {
+  margin-top: 12px;
+  opacity: 1;
+  transition: opacity 0.2s ease;
+}
+main.start-collapsed .start-pane-content {
+  opacity: 0;
+  pointer-events: none;
+}
+.start-pane h3 {
+  margin: 0 0 8px 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  opacity: 0.6;
+}
+.start-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.start-btn {
+  width: 100%;
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid var(--border, #ccc);
+  background: transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 14px;
+}
+.start-btn:hover { background: rgba(127,127,127,0.08); }
+
 .canvas-wrap {
+  position: relative;
   display: grid;
   place-items: center;
   background: var(--bg, #fafafa);
@@ -29,6 +85,37 @@ main {
   max-height: 560px;
   width: 100%;
   justify-self: center;
+}
+
+.size-input-overlay {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  background: rgba(255,255,255,0.92);
+  border: 1px solid var(--border, #e0e0e0);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 13px;
+  z-index: 2;
+}
+@media (prefers-color-scheme: dark) {
+  .size-input-overlay { background: rgba(26,26,26,0.92); border-color: #333; }
+}
+.size-input-overlay label { display: inline-flex; align-items: center; gap: 4px; }
+.size-input-overlay input {
+  width: 70px;
+  padding: 4px 6px;
+  font: inherit;
+  border: 1px solid var(--border, #ccc);
+  border-radius: 4px;
+}
+.size-input-overlay .hint {
+  font-size: 11px;
+  opacity: 0.55;
+  margin-left: 4px;
 }
 
 @media (prefers-color-scheme: dark) {

@@ -5,8 +5,10 @@
 import {
   compose,
   defaultDisk,
-  defaultPolygonShape,
+  extrusionOf,
   rectOutline,
+  rectShapeOf,
+  rodOf,
   type AuthoringShape,
   type CircleHole,
   type PolygonHole,
@@ -18,13 +20,16 @@ import type { ToWorker, FromWorker } from "./types.ts";
 import { toWire } from "@core/shape.ts";
 
 const els = {
-  canvas: document.getElementById("cv") as HTMLCanvasElement,
+  main:          document.querySelector("main") as HTMLElement,
+  canvas:        document.getElementById("cv") as HTMLCanvasElement,
+  startPane:        document.getElementById("start-pane")        as HTMLElement,
+  startPaneToggle:  document.getElementById("start-pane-toggle") as HTMLButtonElement,
+  startBtns:        Array.from(document.querySelectorAll<HTMLButtonElement>(".start-btn")),
+  sizeInput:        document.getElementById("size-input")        as HTMLFormElement,
   addRect:       document.getElementById("op-add-rect")        as HTMLButtonElement,
   addPoly:       document.getElementById("op-add-poly")        as HTMLButtonElement,
   addCircleHole: document.getElementById("op-add-circle-hole") as HTMLButtonElement,
   addPolyHole:   document.getElementById("op-add-poly-hole")   as HTMLButtonElement,
-  modeDisk:      document.getElementById("op-mode-disk")       as HTMLButtonElement,
-  modePoly:      document.getElementById("op-mode-poly")       as HTMLButtonElement,
   primList:      document.getElementById("prim-list")          as HTMLUListElement,
   ix:            document.getElementById("ix")!,
   iy:            document.getElementById("iy")!,
@@ -32,8 +37,14 @@ const els = {
   status:        document.getElementById("status")!,
 };
 
+// Tracks whether the user has touched the shape since the last preset load.
+// Used to decide whether picking a different "Start from" entry should ask
+// for confirmation before discarding their current shape.
+let userModified = false;
+
 const editor = new Editor(els.canvas, defaultDisk(), {
   onChange: () => {
+    userModified = true;
     refreshPrimList();
     refreshButtons();
     recompute();
@@ -126,6 +137,132 @@ function kickOffSolve(shape: ReturnType<typeof compose> extends { ok: true; shap
   worker.postMessage(msg);
 }
 
+// ----- start-from pane -----
+
+type Preset = "rod" | "rect" | "extrusion";
+type FieldDef = { name: string; label: string; min: number; step: number };
+
+const PRESET_FIELDS: Record<Preset, FieldDef[]> = {
+  rod:       [{ name: "D", label: "D", min: 0.1, step: 0.5 }],
+  rect:      [{ name: "W", label: "W", min: 0.1, step: 0.5 },
+              { name: "H", label: "H", min: 0.1, step: 0.5 }],
+  extrusion: [{ name: "S", label: "S", min: 1010, step: 1 }],
+};
+const PRESET_DEFAULTS: Record<Preset, Record<string, number>> = {
+  rod:       { D: 5 },
+  rect:      { W: 20, H: 5 },
+  extrusion: { S: 2020 },
+};
+
+function setStartPaneOpen(open: boolean): void {
+  els.main.classList.toggle("start-collapsed", !open);
+  els.startPaneToggle.textContent = open ? "◀" : "▶";
+}
+
+els.startPaneToggle.addEventListener("click", () => {
+  setStartPaneOpen(els.main.classList.contains("start-collapsed"));
+});
+
+// Refit the canvas viewport once the pane animation finishes (the column
+// width changes, so the canvas size changes too).
+els.main.addEventListener("transitionend", (ev) => {
+  if ((ev as TransitionEvent).propertyName === "grid-template-columns") editor.refit();
+});
+
+for (const btn of els.startBtns) {
+  btn.addEventListener("click", () => {
+    const preset = btn.dataset.preset as Preset;
+    if (userModified && !confirm("Replace current shape?")) return;
+    applyPreset(preset, PRESET_DEFAULTS[preset]);
+    setStartPaneOpen(false);
+  });
+}
+
+function applyPreset(preset: Preset, vals: Record<string, number>): void {
+  setShapeFromPreset(preset, vals);
+  showSizeInput(preset, vals);
+}
+
+function setShapeFromPreset(preset: Preset, vals: Record<string, number>): void {
+  switch (preset) {
+    case "rod":       editor.setShape(rodOf(vals.D!)); break;
+    case "rect":      editor.setShape(rectShapeOf(vals.W!, vals.H!)); break;
+    case "extrusion": editor.setShape(extrusionOf(vals.S!)); break;
+  }
+  // Preset-driven shape changes don't count as user modification.
+  userModified = false;
+}
+
+function showSizeInput(preset: Preset, initial: Record<string, number>): void {
+  const form = els.sizeInput;
+  form.innerHTML = "";
+  form.hidden = false;
+
+  const fields = PRESET_FIELDS[preset];
+  const inputs: HTMLInputElement[] = [];
+  for (const f of fields) {
+    const label = document.createElement("label");
+    label.textContent = `${f.label} = `;
+    const input = document.createElement("input");
+    input.type = "number";
+    input.value = String(initial[f.name]);
+    input.min = String(f.min);
+    input.step = String(f.step);
+    label.appendChild(input);
+    form.appendChild(label);
+    inputs.push(input);
+  }
+  const hint = document.createElement("span");
+  hint.className = "hint";
+  hint.textContent = "Enter to confirm";
+  form.appendChild(hint);
+
+  const apply = (): void => {
+    const vals: Record<string, number> = {};
+    for (let i = 0; i < fields.length; i++) {
+      const v = Number(inputs[i]!.value);
+      if (!isFinite(v) || v <= 0) return;
+      vals[fields[i]!.name] = v;
+    }
+    setShapeFromPreset(preset, vals);
+  };
+
+  for (let i = 0; i < inputs.length; i++) {
+    const input = inputs[i]!;
+    input.addEventListener("input", apply);
+    input.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter") {
+        ev.preventDefault();
+        if (i + 1 < inputs.length) {
+          inputs[i + 1]!.focus();
+          inputs[i + 1]!.select();
+        } else {
+          dismissSizeInput();
+        }
+      } else if (ev.key === "Escape") {
+        ev.preventDefault();
+        dismissSizeInput();
+      }
+    });
+  }
+
+  // Dismiss when focus leaves the form. setTimeout lets Tab settle on the
+  // next focused element before we check.
+  form.addEventListener("focusout", () => {
+    setTimeout(() => {
+      if (!form.contains(document.activeElement)) dismissSizeInput();
+    }, 0);
+  });
+
+  inputs[0]?.focus();
+  inputs[0]?.select();
+}
+
+function dismissSizeInput(): void {
+  els.sizeInput.hidden = true;
+  els.sizeInput.innerHTML = "";
+}
+
 // ----- buttons -----
 
 els.addRect.addEventListener("click", () => {
@@ -162,30 +299,18 @@ els.addPolyHole.addEventListener("click", () => {
   });
 });
 
-els.modeDisk.addEventListener("click", () => {
-  editor.setShape(defaultDisk());
-});
-
-els.modePoly.addEventListener("click", () => {
-  editor.setShape(defaultPolygonShape());
-});
-
 function ensurePolygonMode(): void {
-  if (editor.getShape().kind !== "polygon") {
-    // Switching kind discards holes (current ones may not be valid in the new outer).
-    // For "+ Rect" to feel direct, we silently switch to polygon mode with the
-    // current disk replaced by an inscribed rectangle so the user has something.
-    const prev = editor.getShape();
-    if (prev.kind === "disk") {
-      const r = prev.r * Math.SQRT1_2; // inscribe square in disk
-      editor.setShape({
-        kind: "polygon",
-        outers: [rectOutline(prev.cx, prev.cy, 2 * r, 2 * r)],
-        holes: [],
-      });
-    } else {
-      editor.setShape(defaultPolygonShape());
-    }
+  // Switching kind discards holes (current ones may not be valid in the new outer).
+  // For "+ Rect" to feel direct, we silently switch to polygon mode with the
+  // current disk replaced by an inscribed rectangle so the user has something.
+  const prev = editor.getShape();
+  if (prev.kind === "disk") {
+    const r = prev.r * Math.SQRT1_2;
+    editor.setShape({
+      kind: "polygon",
+      outers: [rectOutline(prev.cx, prev.cy, 2 * r, 2 * r)],
+      holes: [],
+    });
   }
 }
 
@@ -279,15 +404,7 @@ function selectionEq(a: Selection, b: Selection): boolean {
 }
 
 function refreshButtons(): void {
-  const s = editor.getShape();
-  // Adding rects/polygons in disk mode silently switches to polygon mode (handled in ensurePolygonMode).
-  els.modeDisk.disabled = s.kind === "disk";
-  els.modePoly.disabled = s.kind === "polygon" && s.holes.length === 0 && s.outers.length === 1
-    && rectish(s.outers[0]!);
-}
-
-function rectish(o: { x: number; y: number }[]): boolean {
-  return o.length === 4;
+  // No state-dependent buttons in the right panel right now.
 }
 
 // Initial render
