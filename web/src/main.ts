@@ -12,6 +12,7 @@ import { CanvasStatus } from "./ui/canvas-status.ts";
 import { DebugPane } from "./ui/debug-pane.ts";
 import { ZeroState } from "./ui/zero-state.ts";
 import { toWire } from "@solver/shape.ts";
+import { composeErrorText } from "./error-text.ts";
 
 // Top-level error trap. The geom kernel surfaces unreachable-from-sound-UI
 // states ("invalid" Op results) by having editor.ts throw; the throw lands
@@ -94,7 +95,7 @@ function recompute(): void {
   const result = compose(editor.getShape());
   if (!result.ok) {
     editor.setComposed(null);
-    readouts.setInvalid(`invalid: ${result.reason}`);
+    readouts.setInvalid(`invalid: ${composeErrorText(result)}`);
     return;
   }
   editor.setComposed(result.shape);

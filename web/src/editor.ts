@@ -17,6 +17,7 @@ import { apply, compose } from "@geom/index.ts";
 import type {
   ApplyResult, AuthoringShape, Op, Selection, Vec2,
 } from "@geom/index.ts";
+import { applyErrorText, warnText } from "./error-text.ts";
 import {
   draw, hitHandle, screenToWorld, targetHalfSpan,
   type Handle, type ToolKind, type ToolPreview, type View,
@@ -502,8 +503,8 @@ function makeToolOp(kind: ToolKind, anchor: Vec2, cursor: Vec2): Op {
 
 function statusFromResult(r: ApplyResult): ToolStatus {
   if (r.kind === "ok")      return { level: "valid",   message: null };
-  if (r.kind === "warning") return { level: "warning", message: r.message };
-  if (r.kind === "error")   return { level: "error",   message: r.reason };
+  if (r.kind === "warning") return { level: "warning", message: warnText(r.tag) };
+  if (r.kind === "error")   return { level: "error",   message: applyErrorText(r) };
   // "invalid" is handled by crashIfInvalid before we reach here.
   return { level: "error", message: r.reason };
 }

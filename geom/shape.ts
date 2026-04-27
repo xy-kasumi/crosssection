@@ -30,25 +30,34 @@ export type Selection =
   | { kind: "disk" }                       // the disk itself in DiskShape
   | { kind: "hole"; index: number };       // shape.holes[index]
 
-// Composition errors are surfaced to the UI rather than thrown across the
-// wire; readouts go to "—" and the status line shows the message.
+// Composition errors are tagged so the UI can localize and (for the two
+// indexed variants) highlight the offending hole. No human-language
+// strings live in geom/.
+export type ComposeErrorTag =
+  | { tag: "disk-radius-nonpositive" }
+  | { tag: "no-outer" }
+  | { tag: "outer-empty" }
+  | { tag: "outer-disconnected" }
+  | { tag: "hole-too-few-points";  holeIndex: number }
+  | { tag: "hole-crosses-outer";   holeIndex: number };
+
 export type ComposeOk    = { ok: true;  shape: SolverShape };
-export type ComposeError = { ok: false; reason: string };
+export type ComposeError = { ok: false } & ComposeErrorTag;
 export type ComposeResult = ComposeOk | ComposeError;
 
 export function compose(s: AuthoringShape): ComposeResult {
   // Build the outer ring(s).
   let outerMP: MultiPolygon;
   if (s.kind === "disk") {
-    if (!(s.r > 0)) return { ok: false, reason: "disk radius must be positive" };
+    if (!(s.r > 0)) return { ok: false, tag: "disk-radius-nonpositive" };
     outerMP = outerMultiPolygonOf(s);
   } else {
     const outerRings = s.outers.map(outlineToRing).filter((r) => r.length >= 4);
-    if (outerRings.length === 0) return { ok: false, reason: "no outer geometry" };
+    if (outerRings.length === 0) return { ok: false, tag: "no-outer" };
     outerMP = polygonClipping.union(...outerRings.map((r): MultiPolygon => [[r]]));
   }
-  if (outerMP.length === 0) return { ok: false, reason: "outer geometry is empty" };
-  if (outerMP.length > 1)   return { ok: false, reason: "shape isn't connected (multiple outer pieces)" };
+  if (outerMP.length === 0) return { ok: false, tag: "outer-empty" };
+  if (outerMP.length > 1)   return { ok: false, tag: "outer-disconnected" };
 
   // The single piece may already have computed holes (from polygon-clipping merging
   // outers that overlap). It shouldn't, in our model, but defend against it.
@@ -64,13 +73,13 @@ export function compose(s: AuthoringShape): ComposeResult {
   for (let i = 0; i < s.holes.length; i++) {
     const h = s.holes[i]!;
     const ring = h.kind === "circle" ? ringFromCircle(h.cx, h.cy, h.r) : outlineToRing(h.outline);
-    if (ring.length < 4) return { ok: false, reason: `hole #${i + 1} has too few points` };
+    if (ring.length < 4) return { ok: false, tag: "hole-too-few-points", holeIndex: i };
     const holeMP: MultiPolygon = [[ring]];
     // The hole must be entirely inside the outer (no edge crossings, no parts outside).
     // Test: hole \ outer should be empty.
     const outside = polygonClipping.difference(holeMP, [piece]);
     if (outside.length > 0) {
-      return { ok: false, reason: `hole #${i + 1} crosses the outer boundary or lies outside` };
+      return { ok: false, tag: "hole-crosses-outer", holeIndex: i };
     }
     userHoles.push(ringToOutline(ring));
   }

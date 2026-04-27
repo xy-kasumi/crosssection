@@ -18,14 +18,23 @@ export type {
   Selection,
   ComposeOk,
   ComposeError,
+  ComposeErrorTag,
   ComposeResult,
   BBox,
 } from "./shape.ts";
 export { compose, authoringBBox } from "./shape.ts";
 
 export type { Op, OpKind } from "./op.ts";
-export type { ApplyResult, OpOk, OpWarning, OpError, OpInvalid } from "./apply.ts";
-export { apply, WARN_CIRCLE_LOST } from "./apply.ts";
+export type {
+  ApplyResult,
+  ApplyErrorTag,
+  OpOk,
+  OpWarning,
+  OpError,
+  OpInvalid,
+  WarnTag,
+} from "./apply.ts";
+export { apply } from "./apply.ts";
 
 export {
   defaultDisk,
