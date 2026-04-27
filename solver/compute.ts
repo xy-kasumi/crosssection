@@ -1,16 +1,18 @@
-// Public API of the section-property library.
+// Node-side public API of the FEM solver. Used by solver/tests/.
 //
 // Usage:
-//   import { compute } from "../core/compute.ts";
+//   import { compute } from "@solver/compute.ts";
 //   const result = await compute(shape, { meshSize: 0.5 });
 //
-// `compute` boots Pyodide on first call and reuses the same instance for all
-// subsequent calls. Boot takes ~2 s warm; subsequent calls are sub-second for
-// typical mesh sizes.
+// Boots Pyodide on first call and reuses the same instance for subsequent
+// calls. Boot takes ~2 s warm; subsequent calls are sub-second for typical
+// mesh sizes. Browser callers use `client.ts` instead — same shape data,
+// different transport (Web Worker + postMessage).
 
 import type { SolverShape } from "./shape.ts";
 import { toWire } from "./shape.ts";
-import { bootForNode, type PyodideHost, type SolveResult } from "./pyodide-host.ts";
+import type { PyodideHost, SolveResult } from "./pyodide-host.ts";
+import { bootForNode } from "./node-host.ts";
 
 export interface ComputeOptions {
   // Maximum element area for the FEM mesh. Smaller is more accurate, slower.
@@ -25,17 +27,7 @@ export interface ComputeResult extends SolveResult {
 let hostPromise: Promise<PyodideHost> | null = null;
 
 function getHost(): Promise<PyodideHost> {
-  if (!hostPromise) {
-    // Resolve the repo root from this file's location: core/compute.ts -> ../
-    // For Node we read solve.py + wheel from the filesystem.
-    hostPromise = (async () => {
-      const { fileURLToPath } = await import("node:url");
-      const { dirname, resolve } = await import("node:path");
-      const here = dirname(fileURLToPath(import.meta.url));
-      const repoRoot = resolve(here, "..");
-      return bootForNode(repoRoot);
-    })();
-  }
+  if (!hostPromise) hostPromise = bootForNode();
   return hostPromise;
 }
 

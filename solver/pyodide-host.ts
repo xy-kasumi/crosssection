@@ -1,7 +1,10 @@
-// Host-agnostic Pyodide bootstrap. Same code runs under Node (via `pyodide`'s
-// Node target) and in the browser (M2). Loads the standard distribution + our
+// Host-agnostic Pyodide bootstrap. Loads the standard distribution + our
 // vendored cytriangle wheel + sectionproperties from PyPI/Pyodide CDN, then
-// installs compute/solve.py and exposes solve(shape, meshSize).
+// installs solver/python/solve.py and exposes solve(shape, meshSize).
+//
+// This module is intentionally browser-importable: no `node:` modules. The
+// Node-only convenience that reads solve.py + the wheel from disk lives in
+// `node-host.ts` and is the *only* file in solver/ that imports `node:*`.
 //
 // IMPORTANT: numerics are byte-identical between Pyodide-on-Node and
 // Pyodide-in-browser for our usage. The CLI test battery (Node) is therefore
@@ -30,7 +33,7 @@ export interface PyodideHost {
 interface BootOptions {
   // URL or filesystem path of the cytriangle wheel.
   cytriangleWheel: string;
-  // Inline Python source of compute/solve.py.
+  // Inline Python source of solver/python/solve.py.
   solveModuleSource: string;
 }
 
@@ -78,20 +81,6 @@ export async function boot(options: BootOptions): Promise<PyodideHost> {
     },
   };
   return host;
-}
-
-// Node-only convenience: read solve.py + the wheel from the filesystem and
-// boot. The browser path doesn't use this — it'll fetch them as URLs.
-export async function bootForNode(repoRoot: string): Promise<PyodideHost> {
-  const { readFile } = await import("node:fs/promises");
-  const { pathToFileURL } = await import("node:url");
-  const { resolve } = await import("node:path");
-
-  const solveModuleSource = await readFile(resolve(repoRoot, "compute/solve.py"), "utf8");
-  const wheelPath = resolve(repoRoot, "wheels/cytriangle-3.0.2-cp312-cp312-emscripten_3_1_58_wasm32.whl");
-  const cytriangleWheel = pathToFileURL(wheelPath).href;
-
-  return boot({ cytriangleWheel, solveModuleSource });
 }
 
 // Pyodide types used internally; suppress unused warning.

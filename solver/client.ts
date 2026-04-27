@@ -1,36 +1,36 @@
-// The boundary between web UI and the FEM core (Pyodide worker).
+// Public entry point of `solver/` for the browser. The one thing web is
+// allowed to import from solver at runtime: `import { SolverClient }`.
 //
-// Owns the worker lifecycle: spawns it eagerly on page load, watches for the
-// boot handshake, and shows the failure overlay if boot times out or the
-// worker errors. Solve requests are sent via `solve()`; results and errors
-// arrive on the registered handlers.
+// Owns the Pyodide worker lifecycle: spawns it eagerly on page load, watches
+// for the boot handshake, and shows the failure overlay if boot times out
+// or the worker errors. Solve requests are sent via `solve()`; results and
+// errors arrive on the registered handlers.
 //
 // The editor stays interactive throughout boot — readouts just stay blank
 // until `onReady` fires. We only block the UI when boot has *failed*; that's
 // the only state where editing is wasted effort.
 
-import type { ToWorker, FromWorker } from "./types.ts";
-import type { SolveResult } from "@solver/pyodide-host.ts";
-import type { WireShape } from "@solver/shape.ts";
+import type { ToWorker, FromWorker, SolveResult } from "./types.ts";
+import type { WireShape } from "./shape.ts";
 
 const BOOT_TIMEOUT_MS = 45_000;
 
-export interface CoreClientOpts {
+export interface SolverClientOpts {
   onReady: () => void;
   onResult: (id: number, result: SolveResult) => void;
   onError: (id: number, error: string) => void;
 }
 
-export class CoreClient {
+export class SolverClient {
   private worker: Worker | null = null;
   private ready = false;
   private bootResolved = false;
   private bootTimer: number;
-  private readonly opts: CoreClientOpts;
+  private readonly opts: SolverClientOpts;
   private readonly overlay: HTMLElement;
   private readonly card: HTMLElement;
 
-  constructor(opts: CoreClientOpts) {
+  constructor(opts: SolverClientOpts) {
     this.opts = opts;
     this.overlay = document.getElementById("boot-overlay") as HTMLElement;
     this.card = document.getElementById("boot-card") as HTMLElement;
@@ -41,7 +41,7 @@ export class CoreClient {
     );
 
     try {
-      this.worker = new Worker(new URL("./core-worker.ts", import.meta.url), { type: "module" });
+      this.worker = new Worker(new URL("./worker.ts", import.meta.url), { type: "module" });
     } catch (err) {
       this.fail(`Worker construction failed: ${err instanceof Error ? err.message : String(err)}`);
       return;

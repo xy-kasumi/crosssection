@@ -14,10 +14,22 @@
     "forceConsistentCasingInFileNames": true,
     "lib": ["ES2022", "DOM", "DOM.Iterable", "WebWorker"],
     "paths": {
-      "@core/*": ["../core/*"],
-      "@compute/*": ["../compute/*"]
+      "@solver/*": ["../solver/*"]
     },
     "types": ["vite/client"]
   },
-  "include": ["src/**/*.ts", "../core/**/*.ts"]
+  "include": [
+    "src/**/*.ts",
+    "../solver/client.ts",
+    "../solver/worker.ts",
+    "../solver/types.ts",
+    "../solver/shape.ts",
+    "../solver/pyodide-host.ts"
+  ],
+  "exclude": [
+    "../solver/node-host.ts",
+    "../solver/compute.ts",
+    "../solver/presets.ts",
+    "../solver/tests/**"
+  ]
 }

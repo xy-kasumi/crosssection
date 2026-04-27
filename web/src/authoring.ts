@@ -1,4 +1,4 @@
-// Editor-facing shape representation. Distinct from `core/shape.ts`'s
+// Editor-facing shape representation. Distinct from `solver/shape.ts`'s
 // FEM-facing types — same structural data but renamed to prevent the two
 // from accidentally crossing the boundary. compose() is the single
 // translation point.
@@ -29,7 +29,7 @@ export type ComposeOk    = { ok: true;  shape: SolverShape };
 export type ComposeError = { ok: false; reason: string };
 export type ComposeResult = ComposeOk | ComposeError;
 
-const CIRCLE_N = 64; // polygonization for circles & disk outers (kept consistent with core/presets.ts)
+const CIRCLE_N = 64; // polygonization for circles & disk outers (kept consistent with solver/presets.ts)
 
 export function compose(s: AuthoringShape): ComposeResult {
   // Build the outer ring(s).

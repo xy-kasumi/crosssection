@@ -1,16 +1,16 @@
 /// <reference lib="webworker" />
 //
 // Pyodide worker. Boots Pyodide from the official CDN, installs our vendored
-// cytriangle wheel + sectionproperties, loads compute/solve.py, then services
+// cytriangle wheel + sectionproperties, loads python/solve.py, then services
 // `solve` requests.
 //
 // We use the CDN for the Pyodide runtime itself (~5 MB) so the dev workflow
 // is one-step. The cytriangle wheel is served by Vite from our repo. If we
 // ever need full offline support, mirror the Pyodide files into web/public/.
 
-import solveSource from "@compute/solve.py?raw";
-import wheelUrl from "@wheels/cytriangle-3.0.2-cp312-cp312-emscripten_3_1_58_wasm32.whl?url";
-import type { ToWorker, FromWorker } from "./types.ts";
+import solveSource from "./python/solve.py?raw";
+import wheelUrl from "./wheels/cytriangle-3.0.2-cp312-cp312-emscripten_3_1_58_wasm32.whl?url";
+import type { ToWorker, FromWorker, SolveResult } from "./types.ts";
 
 const PYODIDE_VERSION = "0.27.7";
 const PYODIDE_INDEX = `https://cdn.jsdelivr.net/pyodide/v${PYODIDE_VERSION}/full/`;
@@ -134,9 +134,9 @@ self.onmessage = async (ev: MessageEvent<ToWorker>) => {
     // simpler: solveFn accepts a JS array directly because pyodide auto-converts.
     const resultProxy = solveFn(msg.shape, msg.meshSize) as { toJs: (o: unknown) => unknown; destroy: () => void };
     const ms = performance.now() - t0;
-    const result = resultProxy.toJs({ dict_converter: Object.fromEntries }) as Awaited<ReturnType<typeof boot>> extends never ? never : import("@solver/pyodide-host.ts").SolveResult;
+    const result = resultProxy.toJs({ dict_converter: Object.fromEntries }) as SolveResult;
     resultProxy.destroy();
-    emit({ type: "result", id: msg.id, result: result as import("@solver/pyodide-host.ts").SolveResult, ms });
+    emit({ type: "result", id: msg.id, result, ms });
   } catch (err) {
     const error = err instanceof Error ? `${err.message}` : String(err);
     emit({ type: "error", id: msg.id, error });

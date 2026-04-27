@@ -15,5 +15,6 @@
     "forceConsistentCasingInFileNames": true,
     "lib": ["ES2022", "DOM"]
   },
-  "include": ["solver/**/*.ts"]
+  "include": ["solver/**/*.ts"],
+  "exclude": ["solver/worker.ts", "solver/client.ts"]
 }

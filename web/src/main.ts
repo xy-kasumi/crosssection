@@ -1,10 +1,10 @@
 // Composition root. Wires the panels (start, toolbar, readouts, debug,
-// zero-state), the Editor, and the Pyodide CoreClient. No DOM lookups,
-// no UI logic — those live in their respective modules.
+// zero-state), the Editor, and the SolverClient. No DOM lookups, no UI
+// logic — those live in their respective modules.
 
 import { compose, defaultDisk } from "./authoring.ts";
 import { Editor } from "./editor.ts";
-import { CoreClient } from "./core-boot.ts";
+import { SolverClient } from "@solver/client.ts";
 import { Readouts } from "./ui/readouts.ts";
 import { StartPane } from "./ui/start-pane.ts";
 import { Toolbar } from "./ui/toolbar.ts";
@@ -39,7 +39,7 @@ const zeroState    = new ZeroState({ editor, readouts });
 let nextId = 1;
 let lastDisplayedId = 0;
 
-const core = new CoreClient({
+const core = new SolverClient({
   onReady: () => recompute(),
   onResult: (id, result) => {
     if (id < lastDisplayedId) return;
