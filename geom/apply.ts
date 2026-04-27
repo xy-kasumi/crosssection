@@ -141,6 +141,20 @@ function eraseRect(base: AuthoringShape, p1: Vec2, p2: Vec2): ApplyResult {
   if (!rect) return noop(base);
   const rectMP: MultiPolygon = [[outlineToRing(rect)]];
 
+  // Build the current filled region (outer \ all-holes).
+  const outerMP = outerMultiPolygonOf(base);
+  const allHolesMP = holesMultiPolygon(base.holes);
+  const filled = allHolesMP.length > 0
+    ? polygonClipping.difference(outerMP, allHolesMP)
+    : outerMP;
+
+  // Rect doesn't touch any solid material → no-op. Returning early here
+  // keeps a disk's identity (and its handles) when the user drags an
+  // erase-rect off-shape; without it we'd polygonize the unchanged outer.
+  if (polygonClipping.intersection(filled, rectMP).length === 0) {
+    return noop(base);
+  }
+
   // Detect circle prims whose identity is consumed by this op:
   //   - any circle hole the rect touches
   //   - the disk outer itself, when the base is a disk (the result is always
@@ -154,12 +168,6 @@ function eraseRect(base: AuthoringShape, p1: Vec2, p2: Vec2): ApplyResult {
     }
   }
 
-  // Build the current filled region (outer \ all-holes), then subtract rect.
-  const outerMP = outerMultiPolygonOf(base);
-  const allHolesMP = holesMultiPolygon(base.holes);
-  const filled = allHolesMP.length > 0
-    ? polygonClipping.difference(outerMP, allHolesMP)
-    : outerMP;
   const remaining = polygonClipping.difference(filled, rectMP);
   if (remaining.length === 0) return err({ tag: "empties-shape" });
   if (remaining.length > 1)   return err({ tag: "disconnects-shape" });

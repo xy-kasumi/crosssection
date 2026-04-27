@@ -38,6 +38,18 @@ test("rod → paint-rect crossing the boundary → warning, disk identity lost",
   assert.equal(r.shape.kind, "polygon");
 });
 
+test("rod → erase-rect entirely outside the disk → ok, disk identity preserved", () => {
+  // Pre-fix this returned `warning` (and converted disk → polygon) because
+  // consumesCircle defaulted to true for any disk base. With the early-out
+  // a non-overlapping erase is a clean no-op.
+  const rod = rodOf(5); // r=2.5
+  const op: Op = { kind: "erase-rect", anchor: { x: 10, y: 10 }, cursor: { x: 11, y: 11 } };
+  const r = apply(rod, op);
+  assert.equal(r.kind, "ok");
+  if (r.kind !== "ok") return;
+  assert.equal(r.shape, rod);
+});
+
 test("rod → paint-rect entirely outside the disk → error (disconnected piece)", () => {
   // Sanity: the polygonized-disk fix must not regress the genuine
   // "rect doesn't touch the shape" case.
