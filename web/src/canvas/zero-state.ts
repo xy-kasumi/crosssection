@@ -7,7 +7,7 @@
 // it computes the same `idx` to fire onShape callbacks in lockstep with
 // what's visible).
 
-import type { Shape as CoreShape } from "@core/shape.ts";
+import type { SolverShape } from "@solver/shape.ts";
 import { worldToScreen, type View } from "./index.ts";
 import { drawGrid } from "./grid.ts";
 
@@ -28,7 +28,7 @@ export function zeroStateIdx(tSeconds: number, n: number): number {
 export function drawZeroState(
   canvas: HTMLCanvasElement,
   view: View,
-  shapes: CoreShape[],
+  shapes: SolverShape[],
   tSeconds: number,
 ): void {
   const ctx = canvas.getContext("2d");
@@ -56,7 +56,7 @@ export function drawZeroState(
 function drawDemoShape(
   ctx: CanvasRenderingContext2D,
   view: View,
-  shape: CoreShape,
+  shape: SolverShape,
   alpha: number,
 ): void {
   if (alpha <= 0) return;

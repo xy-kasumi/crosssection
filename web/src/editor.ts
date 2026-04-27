@@ -13,7 +13,7 @@ import {
 } from "./canvas/index.ts";
 import { previewOp, type Op, type OpResult } from "./ops.ts";
 import { ViewAnimator } from "./view-animator.ts";
-import type { Shape as CoreShape } from "@core/shape.ts";
+import type { SolverShape } from "@solver/shape.ts";
 
 // Tool state shipped to the host so the toolbar can light up the active
 // button and show the right hint. Phase = whether we've captured the first
@@ -45,7 +45,7 @@ export class Editor {
   private readonly cb: EditorCallbacks;
   private readonly animator: ViewAnimator;
   private shape: AuthoringShape;
-  private composed: CoreShape | null = null;
+  private composed: SolverShape | null = null;
   private selection: Selection | null = null;
   private handles: Handle[] = [];
 
@@ -104,7 +104,7 @@ export class Editor {
     this.cb.onChange();
   }
 
-  setComposed(composed: CoreShape | null): void {
+  setComposed(composed: SolverShape | null): void {
     this.composed = composed;
     this.render();
   }
@@ -134,7 +134,7 @@ export class Editor {
     if (this.tool) this.render();
   }
 
-  setZeroState(shapes: CoreShape[] | null, onShape?: (idx: number) => void): void {
+  setZeroState(shapes: SolverShape[] | null, onShape?: (idx: number) => void): void {
     this.animator.setZeroState(shapes, onShape);
   }
   isZeroState(): boolean { return this.animator.isZeroState(); }
@@ -157,7 +157,7 @@ export class Editor {
     // Default: render the live AuthoringShape and its already-composed FEM
     // silhouette (kept current by main.ts on every onChange).
     let displayShape: AuthoringShape = this.shape;
-    let displayComposed: CoreShape | null = this.composed;
+    let displayComposed: SolverShape | null = this.composed;
 
     if (this.tool && this.cursorWorld) {
       const cursor = this.snapWorld(this.cursorWorld);

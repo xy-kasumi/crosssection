@@ -10,7 +10,7 @@ In-browser calculator for 2D cross-section properties: **Iₓ**, **Iᵧ** (secon
 ## Layout
 
 ```
-core/             TS library: types, presets, Pyodide bridge. Stack-neutral.
+solver/           TS library: types, presets, Pyodide bridge. Stack-neutral.
 compute/          Python loaded into Pyodide (solve.py + closed_form.py).
 pyodide-build/    Recipe + script for rebuilding the cytriangle wheel.
 wheels/           Vendored built wheels (committed binaries; the artifact).
@@ -37,7 +37,7 @@ The root `package.json` declares **no bundler** — it depends only on `pyodide`
 - Internal shape representation is polygon-only (`Shape = Polygon[]`). Curves enter as fine polygons; a single uniform input format keeps curvature concerns confined to the mesher.
 - Tests run under Pyodide-on-Node (`npm test`), not in a browser — same Python, same wheels, same numerics.
 - Every expected value in `tests/cases.ts` cites an external source (closed form, textbook, standard). Self-computed regression baselines are not allowed: if the algorithm is wrong, a self-baseline is wrong, the test passes, wrong numbers ship.
-- The browser worker (`web/src/core-worker.ts`) boots Pyodide at module top-level. Lazy-on-first-message deadlocks against a main thread waiting for `ready`. Boot is non-blocking from the user's perspective: the editor is interactive immediately and a failure overlay only appears if boot times out (45 s) or the worker errors.
+- The browser worker (`web/src/core-worker.ts`, moves into `solver/` in plan phase A.2) boots Pyodide at module top-level. Lazy-on-first-message deadlocks against a main thread waiting for `ready`. Boot is non-blocking from the user's perspective: the editor is interactive immediately and a failure overlay only appears if boot times out (45 s) or the worker errors.
 - Coordinate-system invariant in the web UI: only `editor.ts` and `canvas/index.ts` cross the world↔CSS-pixel boundary. Submodules under `canvas/*` consume a `View` and emit pixels; they never reverse the transform themselves.
 
 ## Dev instructions

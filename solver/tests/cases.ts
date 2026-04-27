@@ -4,9 +4,9 @@
 // (closed form, standard, textbook). No self-computed regression baselines.
 // See feedback memory: feedback_external_test_references.md.
 
-import type { Shape } from "../core/shape.ts";
+import type { SolverShape } from "../shape.ts";
 import * as cf from "./closed-form.ts";
-import { circle, equilateralTriangle, hollowCircle, rectangle, rhs } from "../core/presets.ts";
+import { circle, equilateralTriangle, hollowCircle, rectangle, rhs } from "../presets.ts";
 
 export interface ExpectedTriple {
   ixx_c: number;
@@ -24,7 +24,7 @@ export interface ToleranceTriple {
 export interface TestCase {
   name: string;
   citation: string; // free-text reference; required (per project memory)
-  shape: Shape;
+  shape: SolverShape;
   meshSize: number;
   expected: ExpectedTriple;
   tolerance: ToleranceTriple;

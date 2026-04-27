@@ -1,29 +1,29 @@
-// Preset shape constructors. Every preset returns a Shape (list of polygons:
+// Preset shape constructors. Every preset returns a SolverShape (list of polygons:
 // outer first, then holes). All curves are discretized to polygons; the default
 // n-side count is chosen so Ix discretization error stays below 0.05% for a
 // circle, far below the 1% target.
 
-import type { Point2D, Polygon, Shape } from "./shape.ts";
+import type { Point2D, Polygon, SolverShape } from "./shape.ts";
 
 const TAU = Math.PI * 2;
 
-export function circle(d: number, n = 64): Shape {
+export function circle(d: number, n = 64): SolverShape {
   return [polygonRing(d / 2, n, /*ccw*/ true)];
 }
 
-export function hollowCircle(dOuter: number, dInner: number, n = 64): Shape {
+export function hollowCircle(dOuter: number, dInner: number, n = 64): SolverShape {
   return [
     polygonRing(dOuter / 2, n, /*ccw*/ true),
     polygonRing(dInner / 2, n, /*ccw*/ false),
   ];
 }
 
-export function rectangle(b: number, h: number, cx = 0, cy = 0): Shape {
+export function rectangle(b: number, h: number, cx = 0, cy = 0): SolverShape {
   return [rectRing(b, h, cx, cy, /*ccw*/ true)];
 }
 
 // Rectangular hollow section (RHS): outer B x H, uniform wall thickness t.
-export function rhs(B: number, H: number, t: number, cx = 0, cy = 0): Shape {
+export function rhs(B: number, H: number, t: number, cx = 0, cy = 0): SolverShape {
   return [
     rectRing(B, H, cx, cy, /*ccw*/ true),
     rectRing(B - 2 * t, H - 2 * t, cx, cy, /*ccw*/ false),
@@ -32,7 +32,7 @@ export function rhs(B: number, H: number, t: number, cx = 0, cy = 0): Shape {
 
 // Equilateral triangle of side `a`, centered on its centroid, oriented with
 // one vertex pointing in +y. Three sharp corners.
-export function equilateralTriangle(a: number): Shape {
+export function equilateralTriangle(a: number): SolverShape {
   const r = a / Math.sqrt(3); // distance from centroid to vertex
   const ring: Polygon = [
     { x: 0, y: r },
@@ -46,7 +46,7 @@ export function equilateralTriangle(a: number): Shape {
 //   bf: flange width    d:  total depth
 //   tf: flange thickness  tw: web thickness
 // Centered on the origin. Single outer polygon (no holes).
-export function iBeam(bf: number, d: number, tf: number, tw: number): Shape {
+export function iBeam(bf: number, d: number, tf: number, tw: number): SolverShape {
   const x = bf / 2;
   const y = d / 2;
   const xw = tw / 2;

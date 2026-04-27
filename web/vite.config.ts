@@ -9,8 +9,8 @@ const here = dirname(fileURLToPath(import.meta.url));
 export default defineConfig({
   resolve: {
     alias: {
-      // Let web code import from ../core/* and ../compute/* using absolute aliases.
-      "@core": resolve(here, "../core"),
+      // Let web code import from ../solver/* and ../compute/* using absolute aliases.
+      "@solver": resolve(here, "../solver"),
       "@compute": resolve(here, "../compute"),
       "@wheels": resolve(here, "../wheels"),
     },

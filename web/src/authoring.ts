@@ -4,7 +4,7 @@
 // translation point.
 
 import polygonClipping, { type MultiPolygon } from "polygon-clipping";
-import type { Shape as CoreShape, Polygon as CorePolygon } from "@core/shape.ts";
+import type { SolverShape, Polygon as SolverPolygon } from "@solver/shape.ts";
 
 export type Vec2 = { x: number; y: number };
 export type Outline = Vec2[]; // ring; no closing duplicate
@@ -25,7 +25,7 @@ export type Selection =
 
 // Composition errors are surfaced to the UI rather than thrown across the
 // wire; readouts go to "—" and the status line shows the message.
-export type ComposeOk    = { ok: true;  shape: CoreShape };
+export type ComposeOk    = { ok: true;  shape: SolverShape };
 export type ComposeError = { ok: false; reason: string };
 export type ComposeResult = ComposeOk | ComposeError;
 
@@ -71,10 +71,10 @@ export function compose(s: AuthoringShape): ComposeResult {
     userHoles.push(ringToOutline(ring));
   }
 
-  const shape: CoreShape = [
-    ringToCorePolygon(outer),
-    ...computedHoles.map(ringToCorePolygon),
-    ...userHoles.map(outlineToCorePolygon),
+  const shape: SolverShape = [
+    ringToSolverPolygon(outer),
+    ...computedHoles.map(ringToSolverPolygon),
+    ...userHoles.map(outlineToSolverPolygon),
   ];
   return { ok: true, shape };
 }
@@ -109,15 +109,15 @@ export function ringToOutline(r: PCRing): Outline {
   return out;
 }
 
-function ringToCorePolygon(r: PCRing): CorePolygon {
+function ringToSolverPolygon(r: PCRing): SolverPolygon {
   const n = r.length > 0 && r[0]![0] === r[r.length - 1]![0] && r[0]![1] === r[r.length - 1]![1]
     ? r.length - 1 : r.length;
-  const out: CorePolygon = [];
+  const out: SolverPolygon = [];
   for (let i = 0; i < n; i++) out.push({ x: r[i]![0], y: r[i]![1] });
   return out;
 }
 
-function outlineToCorePolygon(o: Outline): CorePolygon {
+function outlineToSolverPolygon(o: Outline): SolverPolygon {
   return o.map((p) => ({ x: p.x, y: p.y }));
 }
 

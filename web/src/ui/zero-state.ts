@@ -11,11 +11,11 @@ import {
   compose, extrusionOf, rectShapeOf, rodOf,
   type AuthoringShape,
 } from "../authoring.ts";
-import type { Shape as CoreShape } from "@core/shape.ts";
+import type { SolverShape } from "@solver/shape.ts";
 import type { Editor } from "../editor.ts";
 import type { Readouts } from "./readouts.ts";
 
-type DemoEntry = { shape: CoreShape; ix: number; iy: number; j: number };
+type DemoEntry = { shape: SolverShape; ix: number; iy: number; j: number };
 
 export class ZeroState {
   private readonly editor: Editor;

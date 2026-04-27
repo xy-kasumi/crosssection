@@ -7,7 +7,7 @@
 // (drawZeroState) — Editor's render() is a no-op. When zero state ends,
 // the editor regains paint ownership.
 
-import type { Shape as CoreShape } from "@core/shape.ts";
+import type { SolverShape } from "@solver/shape.ts";
 import {
   drawZeroState, makeView,
   ZERO_STATE_HALFSPAN, zeroStateIdx,
@@ -33,7 +33,7 @@ export class ViewAnimator {
   private targetSpan: number;
   private spanRaf: number | null = null;
   private zero: {
-    shapes: CoreShape[];
+    shapes: SolverShape[];
     startMs: number;
     rafId: number | null;
     lastIdx: number;
@@ -70,7 +70,7 @@ export class ViewAnimator {
     if (!this.zero) this.cb.onViewChange();
   }
 
-  setZeroState(shapes: CoreShape[] | null, onShape?: (idx: number) => void): void {
+  setZeroState(shapes: SolverShape[] | null, onShape?: (idx: number) => void): void {
     if (shapes === null) {
       if (!this.zero) return;
       if (this.zero.rafId !== null) cancelAnimationFrame(this.zero.rafId);

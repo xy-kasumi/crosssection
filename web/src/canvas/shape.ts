@@ -1,14 +1,14 @@
 // Filled silhouette (outer + holes via even-odd fill rule). The composed
-// CoreShape is what the FEM solver sees, so this is also what the user sees
+// SolverShape is what the FEM solver sees, so this is also what the user sees
 // — divergence here would be misleading.
 
-import type { Shape as CoreShape } from "@core/shape.ts";
+import type { SolverShape } from "@solver/shape.ts";
 import { worldToScreen, type View } from "./index.ts";
 
 export function drawShape(
   ctx: CanvasRenderingContext2D,
   view: View,
-  shape: CoreShape,
+  shape: SolverShape,
   opts: { faded?: boolean } = {},
 ): void {
   const path = new Path2D();

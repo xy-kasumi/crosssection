@@ -1,7 +1,7 @@
 // Messages between UI thread and the Pyodide worker.
 
-import type { WireShape } from "@core/shape.ts";
-import type { SolveResult } from "@core/pyodide-host.ts";
+import type { WireShape } from "@solver/shape.ts";
+import type { SolveResult } from "@solver/pyodide-host.ts";
 
 export type ToWorker =
   | { type: "solve"; id: number; shape: WireShape; meshSize: number };

@@ -5,8 +5,8 @@
   "type": "module",
   "description": "In-browser 2D cross-section property calculator (Ix, Iy, J)",
   "scripts": {
-    "test": "node --import tsx tests/run-battery.ts",
-    "test:unit": "node --import tsx --test 'tests/unit/*.test.ts'",
+    "test": "node --import tsx solver/tests/run-battery.ts",
+    "test:unit": "node --import tsx --test 'solver/tests/unit/*.test.ts'",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

@@ -11,7 +11,7 @@ import { Toolbar } from "./ui/toolbar.ts";
 import { CanvasStatus } from "./ui/canvas-status.ts";
 import { DebugPane } from "./ui/debug-pane.ts";
 import { ZeroState } from "./ui/zero-state.ts";
-import { toWire } from "@core/shape.ts";
+import { toWire } from "@solver/shape.ts";
 
 const canvas = document.getElementById("cv") as HTMLCanvasElement;
 

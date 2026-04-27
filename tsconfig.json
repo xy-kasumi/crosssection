@@ -15,5 +15,5 @@
     "forceConsistentCasingInFileNames": true,
     "lib": ["ES2022", "DOM"]
   },
-  "include": ["core/**/*.ts", "tests/**/*.ts"]
+  "include": ["solver/**/*.ts"]
 }

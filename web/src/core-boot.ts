@@ -10,8 +10,8 @@
 // the only state where editing is wasted effort.
 
 import type { ToWorker, FromWorker } from "./types.ts";
-import type { SolveResult } from "@core/pyodide-host.ts";
-import type { WireShape } from "@core/shape.ts";
+import type { SolveResult } from "@solver/pyodide-host.ts";
+import type { WireShape } from "@solver/shape.ts";
 
 const BOOT_TIMEOUT_MS = 45_000;
 

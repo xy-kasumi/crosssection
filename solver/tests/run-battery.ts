@@ -4,7 +4,7 @@
 // {ixx_c, iyy_c, j} to the externally-cited expected value, print one row per
 // (case × property), exit non-zero on any failure.
 
-import { compute } from "../core/compute.ts";
+import { compute } from "../compute.ts";
 import { cases, type ExpectedTriple, type ToleranceTriple } from "./cases.ts";
 
 const PROPS = ["ixx_c", "iyy_c", "j"] as const;

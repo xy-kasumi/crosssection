@@ -12,7 +12,7 @@
 //                          sizes canvas.width/height) and the per-frame
 //                          `ctx.setTransform(dpr,...)` know about this.
 
-import type { Shape as CoreShape } from "@core/shape.ts";
+import type { SolverShape } from "@solver/shape.ts";
 import type { AuthoringShape, Selection, Vec2 } from "../authoring.ts";
 
 import { drawGrid } from "./grid.ts";
@@ -103,7 +103,7 @@ export function draw(
   canvas: HTMLCanvasElement,
   view: View,
   shape: AuthoringShape,
-  composed: CoreShape | null,
+  composed: SolverShape | null,
   selection: Selection | null,
   toolPreview: ToolPreview | null = null,
 ): Handle[] {

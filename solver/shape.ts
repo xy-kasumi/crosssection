@@ -4,7 +4,7 @@
 
 export type Point2D = { x: number; y: number };
 export type Polygon = Point2D[];
-export type Shape = Polygon[];
+export type SolverShape = Polygon[];
 
 // Polygon-as-tuples is the wire format crossing the JS<->Python boundary.
 // Pyodide auto-converts nested arrays of numbers; objects with x/y do too,
@@ -13,7 +13,7 @@ export type WirePoint = readonly [number, number];
 export type WireRing = readonly WirePoint[];
 export type WireShape = readonly WireRing[];
 
-export function toWire(shape: Shape): WireShape {
+export function toWire(shape: SolverShape): WireShape {
   return shape.map((ring) => ring.map((p) => [p.x, p.y] as const));
 }
 

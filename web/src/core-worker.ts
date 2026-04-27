@@ -134,9 +134,9 @@ self.onmessage = async (ev: MessageEvent<ToWorker>) => {
     // simpler: solveFn accepts a JS array directly because pyodide auto-converts.
     const resultProxy = solveFn(msg.shape, msg.meshSize) as { toJs: (o: unknown) => unknown; destroy: () => void };
     const ms = performance.now() - t0;
-    const result = resultProxy.toJs({ dict_converter: Object.fromEntries }) as Awaited<ReturnType<typeof boot>> extends never ? never : import("@core/pyodide-host.ts").SolveResult;
+    const result = resultProxy.toJs({ dict_converter: Object.fromEntries }) as Awaited<ReturnType<typeof boot>> extends never ? never : import("@solver/pyodide-host.ts").SolveResult;
     resultProxy.destroy();
-    emit({ type: "result", id: msg.id, result: result as import("@core/pyodide-host.ts").SolveResult, ms });
+    emit({ type: "result", id: msg.id, result: result as import("@solver/pyodide-host.ts").SolveResult, ms });
   } catch (err) {
     const error = err instanceof Error ? `${err.message}` : String(err);
     emit({ type: "error", id: msg.id, error });
