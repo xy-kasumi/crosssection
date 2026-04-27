@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "polygon-clipping": "^0.15.7",
     "pyodide": "^0.27.0"
   },
   "devDependencies": {
