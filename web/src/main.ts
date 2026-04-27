@@ -18,7 +18,7 @@ import { Editor, type ToolState } from "./editor.ts";
 import type { ToolKind } from "./canvas.ts";
 import { twoSigFigs } from "./format.ts";
 import type { ToWorker, FromWorker } from "./types.ts";
-import { toWire } from "@core/shape.ts";
+import { toWire, type Shape as CoreShape } from "@core/shape.ts";
 
 const els = {
   main:             document.querySelector("main") as HTMLElement,
@@ -128,6 +128,9 @@ worker.addEventListener("message", (ev: MessageEvent<FromWorker>) => {
       break;
     case "result": {
       if (msg.id < lastDisplayedId) return;
+      // Zero state still owns the readouts; ignore any stale boot-time
+      // computation that finishes after we entered (or are still in) demo.
+      if (editor.isZeroState()) return;
       lastDisplayedId = msg.id;
       els.ix.textContent = twoSigFigs(msg.result.ixx_c);
       els.iy.textContent = twoSigFigs(msg.result.iyy_c);
@@ -142,6 +145,7 @@ worker.addEventListener("message", (ev: MessageEvent<FromWorker>) => {
         showBootFailure(msg.error);
         return;
       }
+      if (editor.isZeroState()) return;
       setReadouts("—", true);
       els.status.textContent = `error: ${msg.error.split("\n")[0]}`;
       break;
@@ -165,6 +169,9 @@ function setReadouts(val: string, invalid: boolean): void {
 
 let solveTimer: number | null = null;
 function recompute(): void {
+  // Zero state owns the readouts and canvas; suppress real solves until the
+  // user picks a preset. The worker keeps booting in the background.
+  if (editor.isZeroState()) return;
   // Always recompose immediately so the canvas mirrors current state.
   const result = compose(editor.getShape());
   if (!result.ok) {
@@ -225,6 +232,7 @@ for (const btn of els.startBtns) {
   btn.addEventListener("click", () => {
     const preset = btn.dataset.preset as Preset;
     if (userModified && !confirm("Replace current shape?")) return;
+    if (editor.isZeroState()) exitZeroState();
     applyPreset(preset, PRESET_DEFAULTS[preset]);
     setStartPaneOpen(false);
   });
@@ -512,8 +520,83 @@ function refreshButtons(): void {
   // No state-dependent buttons in the right panel right now.
 }
 
-// Initial render
-editor.render();
+// ----- zero-state landing -----
+//
+// Until the user picks a Start from preset, the canvas runs a slow muted
+// crossfade through a few representative cross-sections, and the Ix/Iy/J
+// readouts carousel in lockstep with the visible shape using closed-form
+// values. Goals: hide Pyodide boot time behind something useful; show
+// concretely what this tool computes; keep the user's eye on the only
+// active control (the Start from list).
+//
+// The canvas toolbar (Paint/Erase/Snap) and the right-side debug panel stay
+// hidden — they don't apply until there's a real shape. The status line
+// (`N elems FEM`) is also suppressed: zero-state numbers are closed-form,
+// not FEM, so labelling them as FEM would lie.
+type DemoEntry = { shape: CoreShape; ix: number; iy: number; j: number };
+
+function buildDemoEntries(): DemoEntry[] {
+  const out: DemoEntry[] = [];
+  const push = (auth: AuthoringShape, ix: number, iy: number, j: number): void => {
+    const r = compose(auth);
+    if (r.ok) out.push({ shape: r.shape, ix, iy, j });
+  };
+
+  // 1. Solid rod, D = 8 mm. Ix = Iy = πD⁴/64; J = 2 Ix.
+  {
+    const D = 8;
+    const I = Math.PI * D ** 4 / 64;
+    push(rodOf(D), I, I, 2 * I);
+  }
+  // 2. Hollow rod, Do = 12, Di = 8 mm.
+  {
+    const Do = 12, Di = 8;
+    const I = Math.PI * (Do ** 4 - Di ** 4) / 64;
+    push(
+      { kind: "disk", cx: 0, cy: 0, r: Do / 2,
+        holes: [{ kind: "circle", cx: 0, cy: 0, r: Di / 2 }] },
+      I, I, 2 * I,
+    );
+  }
+  // 3. Solid square, a = 14 mm. Ix = Iy = a⁴/12; J = β₁ a⁴, β₁ ≈ 0.140577 (Roark).
+  {
+    const a = 14;
+    const I = a ** 4 / 12;
+    const J = 0.140577 * a ** 4;
+    push(rectShapeOf(a, a), I, I, J);
+  }
+  // 4. 30×30 hollow square (extrusion 3030 placeholder, t = 2 mm wall).
+  //    Ix = Iy by subtraction (exact). J via Bredt thin-wall, which for a
+  //    square tube simplifies: J = 4·Aₘ²·t / peri = Wₘ³·t  with Wₘ = W−t.
+  {
+    const Wo = 30, Wi = 26;
+    const I = (Wo ** 4 - Wi ** 4) / 12;
+    const Wm = (Wo + Wi) / 2;
+    const t = (Wo - Wi) / 2;
+    const J = Wm ** 3 * t;
+    push(extrusionOf(3030), I, I, J);
+  }
+  return out;
+}
+
+function exitZeroState(): void {
+  document.body.classList.remove("zero-state");
+  editor.setZeroState(null);
+}
+
+const demoEntries = buildDemoEntries();
+document.body.classList.add("zero-state");
+editor.setZeroState(
+  demoEntries.map((e) => e.shape),
+  (idx) => {
+    const e = demoEntries[idx];
+    if (!e) return;
+    els.ix.textContent = twoSigFigs(e.ix);
+    els.iy.textContent = twoSigFigs(e.iy);
+    els.j.textContent  = twoSigFigs(e.j);
+    els.status.textContent = "";
+  },
+);
 refreshPrimList();
 refreshButtons();
 recompute();

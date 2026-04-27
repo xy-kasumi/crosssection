@@ -172,6 +172,76 @@ export function draw(
   return handles;
 }
 
+// Zero-state landing: no real shape yet, just a slow crossfade through a few
+// preset cross-sections in muted grey. The point is to (a) absorb Pyodide
+// boot time without showing a useless "—" readout, and (b) telegraph what
+// kinds of shapes this tool is for. Colour is deliberately desaturated so it
+// doesn't look editable.
+//
+// The slot timing is a shared contract: the host (editor) computes the same
+// `idx` to fire onShape callbacks in lockstep with the visible shape.
+export const ZERO_STATE_PERIOD = 2.5;  // seconds per shape (steady portion)
+export const ZERO_STATE_FADE = 0.5;    // crossfade window at the trailing edge
+export const ZERO_STATE_SLOT = ZERO_STATE_PERIOD + ZERO_STATE_FADE;
+
+export function zeroStateIdx(tSeconds: number, n: number): number {
+  if (n <= 0) return 0;
+  const total = ZERO_STATE_SLOT * n;
+  const tt = ((tSeconds % total) + total) % total;
+  return Math.floor(tt / ZERO_STATE_SLOT);
+}
+
+export function drawZeroState(
+  canvas: HTMLCanvasElement,
+  view: View,
+  shapes: CoreShape[],
+  tSeconds: number,
+): void {
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+  const dpr = window.devicePixelRatio || 1;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, view.cssW, view.cssH);
+  drawGrid(ctx, view);
+
+  if (shapes.length === 0) return;
+  const total = ZERO_STATE_SLOT * shapes.length;
+  const tt = ((tSeconds % total) + total) % total;
+  const idx = Math.floor(tt / ZERO_STATE_SLOT);
+  const local = tt - idx * ZERO_STATE_SLOT;
+
+  if (local > ZERO_STATE_PERIOD) {
+    const f = (ZERO_STATE_SLOT - local) / ZERO_STATE_FADE; // 1 → 0 over fade
+    drawDemoShape(ctx, view, shapes[idx]!, f);
+    drawDemoShape(ctx, view, shapes[(idx + 1) % shapes.length]!, 1 - f);
+  } else {
+    drawDemoShape(ctx, view, shapes[idx]!, 1);
+  }
+}
+
+function drawDemoShape(
+  ctx: CanvasRenderingContext2D,
+  view: View,
+  shape: CoreShape,
+  alpha: number,
+): void {
+  if (alpha <= 0) return;
+  const path = new Path2D();
+  for (const ring of shape) {
+    for (let i = 0; i < ring.length; i++) {
+      const p = ring[i]!;
+      const s = worldToScreen(view, p.x, p.y);
+      if (i === 0) path.moveTo(s.sx, s.sy); else path.lineTo(s.sx, s.sy);
+    }
+    path.closePath();
+  }
+  ctx.fillStyle = `rgba(140, 140, 140, ${0.18 * alpha})`;
+  ctx.fill(path, "evenodd");
+  ctx.strokeStyle = `rgba(110, 110, 110, ${0.55 * alpha})`;
+  ctx.lineWidth = 1.5;
+  ctx.stroke(path);
+}
+
 function drawToolPreview(ctx: CanvasRenderingContext2D, view: View, p: ToolPreview): void {
   const isErase = p.kind !== "paint-rect";
   const stroke = isErase ? "rgb(220, 70, 60)" : "rgb(40, 160, 80)";

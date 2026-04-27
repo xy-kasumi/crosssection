@@ -5,16 +5,23 @@
 import type { AuthoringShape, Outline, Selection, Vec2 } from "./authoring.ts";
 import {
   draw,
+  drawZeroState,
   hitHandle,
   makeView,
   screenToWorld,
   targetHalfSpan,
+  zeroStateIdx,
   type Handle,
   type ToolKind,
   type ToolPreview,
   type View,
 } from "./canvas.ts";
 import type { Shape as CoreShape } from "@core/shape.ts";
+
+// halfSpan used for the zero-state demo carousel. Hand-picked to comfortably
+// contain the largest demo shape (a 30 mm extrusion → max abs coord 15) on
+// the engineering ladder.
+const ZERO_STATE_HALFSPAN = 20;
 
 // Tool state shipped to the host so the toolbar can light up the active
 // button and show the right hint ("click first corner" vs "click opposite
@@ -59,6 +66,18 @@ export class Editor {
   private cursorWorld: Vec2 | null = null;
   private snap = true;
 
+  // Zero-state demo: while non-null, the canvas runs its own RAF carousel
+  // through the supplied composed shapes and all input is ignored. The real
+  // `shape` field still holds the constructor-supplied default so that the
+  // first preset click can transition cleanly into the editor.
+  //
+  // onShape fires whenever the carousel advances to a new index, so the host
+  // can update Ix/Iy/J readouts in lockstep with the visible shape.
+  private zeroState:
+    | { shapes: CoreShape[]; startMs: number; rafId: number | null;
+        lastIdx: number; onShape?: (idx: number) => void }
+    | null = null;
+
   constructor(canvas: HTMLCanvasElement, initial: AuthoringShape, cb: EditorCallbacks) {
     this.canvas = canvas;
     this.cb = cb;
@@ -97,6 +116,47 @@ export class Editor {
     this.cb.onSelectionChange(sel);
     this.render();
   }
+
+  isZeroState(): boolean { return this.zeroState !== null; }
+
+  // Enter (shapes) or leave (null) the zero-state demo carousel. While in
+  // zero state, render() is a no-op — the carousel's RAF tick paints the
+  // canvas every frame. onShape fires once per index transition.
+  setZeroState(shapes: CoreShape[] | null, onShape?: (idx: number) => void): void {
+    if (shapes === null) {
+      if (!this.zeroState) return;
+      if (this.zeroState.rafId !== null) cancelAnimationFrame(this.zeroState.rafId);
+      this.zeroState = null;
+      // Re-fit the editor's actual shape when leaving zero state, so the
+      // grid lands in the right place before the next setShape arrives.
+      this.refit();
+      return;
+    }
+    if (this.zeroState) {
+      this.zeroState.shapes = shapes;
+      this.zeroState.onShape = onShape;
+      return;
+    }
+    this.zeroState = {
+      shapes, startMs: performance.now(), rafId: null,
+      lastIdx: -1, onShape,
+    };
+    this.tickZero();
+  }
+
+  private tickZero = (): void => {
+    if (!this.zeroState) return;
+    this.zeroState.rafId = null;
+    const t = (performance.now() - this.zeroState.startMs) / 1000;
+    this.view = makeView(this.canvas, ZERO_STATE_HALFSPAN);
+    drawZeroState(this.canvas, this.view, this.zeroState.shapes, t);
+    const idx = zeroStateIdx(t, this.zeroState.shapes.length);
+    if (idx !== this.zeroState.lastIdx) {
+      this.zeroState.lastIdx = idx;
+      this.zeroState.onShape?.(idx);
+    }
+    this.zeroState.rafId = requestAnimationFrame(this.tickZero);
+  };
 
   setTool(kind: ToolKind | null): void {
     if (kind === null) {
@@ -164,6 +224,7 @@ export class Editor {
   };
 
   render(): void {
+    if (this.zeroState) return; // RAF tick owns the canvas in zero state
     let preview: ToolPreview | null = null;
     if (this.tool && this.cursorWorld) {
       const cursor = this.snapWorld(this.cursorWorld);
@@ -197,6 +258,7 @@ export class Editor {
   }
 
   private onMouseDown = (ev: MouseEvent): void => {
+    if (this.zeroState) return;
     if (ev.button !== 0) return;
     const { sx, sy } = this.screenFromEvent(ev);
     // 0. Tool mode swallows clicks for 2-step prim placement.
@@ -257,6 +319,7 @@ export class Editor {
   };
 
   private onMouseMove = (ev: MouseEvent): void => {
+    if (this.zeroState) return;
     const { sx, sy } = this.screenFromEvent(ev);
     this.cursorWorld = screenToWorld(this.view, sx, sy);
     if (this.tool) {
@@ -274,6 +337,7 @@ export class Editor {
   };
 
   private onMouseUp = (): void => {
+    if (this.zeroState) return;
     if (this.drag) {
       this.drag = null;
       // The shape's extents may have changed during the drag; now that the
@@ -284,6 +348,7 @@ export class Editor {
 
   private onContextMenu = (ev: MouseEvent): void => {
     ev.preventDefault();
+    if (this.zeroState) return;
     // Right-click cancels an in-flight tool first; otherwise it deletes a
     // vertex under the cursor.
     if (this.tool) {
@@ -302,6 +367,7 @@ export class Editor {
   };
 
   private onKeyDown = (ev: KeyboardEvent): void => {
+    if (this.zeroState) return;
     if (ev.key === "Escape" && this.tool) {
       this.tool = null;
       this.cb.onToolChange?.(null);

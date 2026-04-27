@@ -277,6 +277,15 @@ canvas {
   user-select: none;
 }
 
+/* Zero-state landing: hide the editing toolbar and the right-side debug
+   panel; keep the Start from list and the Ix/Iy/J readouts visible (the
+   readouts carousel in lockstep with the demo, so they're a teaser, not
+   noise). visibility:hidden (not display:none) so the layout doesn't
+   reflow the moment the user picks a preset. */
+body.zero-state .canvas-toolbar,
+body.zero-state .panel { visibility: hidden; }
+body.zero-state canvas { cursor: default; }
+
 .panel {
   display: flex;
   flex-direction: column;
