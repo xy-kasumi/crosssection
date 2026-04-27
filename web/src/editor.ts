@@ -51,19 +51,13 @@ export interface EditorCallbacks {
 }
 
 // Drag state held while the user has the mouse down. Every frame's apply()
-// runs against `startShape` with a delta derived from `startCursor` —
-// never against the previous frame's result. `previewResult` is the most
-// recent apply output, surfaced via render() so the user sees the
-// candidate shape live.
+// runs against `startShape` with the live cursor — never against the
+// previous frame's result. `previewResult` is the most recent apply output,
+// surfaced via render() so the user sees the candidate shape live.
 interface DragState {
   handle: Handle;
   startShape: AuthoringShape;
-  startCursor: Vec2;
   previewResult: ApplyResult | null;
-  // For "translate-prim" of a prim the user picked by clicking its interior
-  // (no specific handle), the handle is a synthetic placeholder; we mark
-  // the gesture explicitly so the same code-path can treat it as whole-prim.
-  isWholePrim: boolean;
 }
 
 export class Editor {
@@ -192,7 +186,7 @@ export class Editor {
         displayComposed = c.ok ? c.shape : null;
       }
       // Hole-circle drags get a ghost circle showing the live target.
-      const ghost = this.holeCircleGhost();
+      const ghost = this.circleDragGhost();
       if (ghost) preview = { ...ghost, valid: r.kind !== "error" };
     }
     this.updateStatus(status);
@@ -281,46 +275,27 @@ export class Editor {
           const newVertex = this.handles.find(
             (h) => h.kind === "vertex" && sameSelection(h.selection, hit.selection) && h.index === newIdx,
           );
-          if (newVertex) this.beginDrag(newVertex, screenToWorld(this.view, sx, sy));
+          if (newVertex) this.beginDrag(newVertex);
         }
         return;
       }
-      this.beginDrag(hit, this.snapWorld(screenToWorld(this.view, sx, sy)));
+      this.beginDrag(hit);
       return;
     }
 
-    // 2. Hit-test prim interior. If interior of an unselected prim, select
-    //    it. If already selected and it's a circle prim (disk or circle hole),
-    //    start moving it as a whole. Polygon outers and polygon holes don't
-    //    translate as a unit — vertex drags are the only mutation.
+    // 2. Hit-test prim interior → select, but never start a drag.
+    //    Circles move via the center handle; polygons move via vertex drags.
     const w = screenToWorld(this.view, sx, sy);
     const sel = this.pickPrimAt(w);
-    if (sel) {
-      const sameAsBefore = this.selection && sameSelection(this.selection, sel);
-      this.setSelection(sel);
-      if (sameAsBefore && this.isCirclePrim(sel)) {
-        const start = this.snapWorld(w);
-        const placeholder: Handle = { kind: "vertex", selection: sel, x: start.x, y: start.y, index: -1 };
-        this.beginDrag(placeholder, start, true);
-      }
-    } else {
-      this.setSelection(null);
-    }
+    if (sel) this.setSelection(sel);
+    else     this.setSelection(null);
   };
 
-  private isCirclePrim(sel: Selection): boolean {
-    if (sel.kind === "disk") return true;
-    if (sel.kind === "hole") return this.shape.holes[sel.index]?.kind === "circle";
-    return false;
-  }
-
-  private beginDrag(handle: Handle, startCursor: Vec2, isWholePrim: boolean = false): void {
+  private beginDrag(handle: Handle): void {
     this.drag = {
       handle,
       startShape: this.shape,
-      startCursor,
       previewResult: null,
-      isWholePrim,
     };
   }
 
@@ -408,10 +383,6 @@ export class Editor {
   private opFromDrag(d: DragState, cursor: Vec2): Op | null {
     const h = d.handle;
     const sel = h.selection;
-    if (d.isWholePrim) {
-      const delta: Vec2 = { x: cursor.x - d.startCursor.x, y: cursor.y - d.startCursor.y };
-      return { kind: "translate-prim", sel, delta };
-    }
     switch (h.kind) {
       case "diskCenter":
         return { kind: "move-disk-center", target: cursor };
@@ -439,32 +410,38 @@ export class Editor {
     }
   }
 
-  private holeCircleGhost(): { kind: "add-hole"; anchor: Vec2; cursor: Vec2; snapping: boolean } | null {
+  private circleDragGhost(): { kind: "add-hole"; anchor: Vec2; cursor: Vec2; snapping: boolean } | null {
     if (!this.drag) return null;
     const h = this.drag.handle;
-    if (h.kind !== "holeCenter" && h.kind !== "holeRadius") return null;
-    if (h.selection.kind !== "hole") return null;
+    const isRadiusDrag = h.kind === "diskRadius" || h.kind === "holeRadius";
+    const isCenterDrag = h.kind === "diskCenter" || h.kind === "holeCenter";
+    if (!isRadiusDrag && !isCenterDrag) return null;
+
     const r = this.drag.previewResult;
     if (!r || (r.kind !== "ok" && r.kind !== "warning")) return null;
-    // Read the circle's live position from the candidate shape — for ok/warn
-    // the circle either survived (move-hole-radius / clean center move) or
-    // was polygonized (in which case there's no circle to ghost; but the
-    // drag still tracks where the user is aiming).
     const candidate = r.shape;
-    // The just-committed circle hole is normally at candidate.holes[index].
-    // For a polygonized result, there's no surviving circle; fall back to
-    // the cursor-derived target so the ghost still tracks.
-    const sel = h.selection;
-    const candidateHole = candidate.holes[sel.index];
-    if (candidateHole && candidateHole.kind === "circle") {
-      return {
-        kind: "add-hole",
-        anchor: { x: candidateHole.cx, y: candidateHole.cy },
-        cursor: { x: candidateHole.cx + candidateHole.r, y: candidateHole.cy },
-        snapping: this.snap,
-      };
+
+    // Read the live center+radius from the candidate. For polygonized
+    // results (warning) the circle is gone — no ghost.
+    let cx: number, cy: number, rad: number;
+    if (h.kind === "diskCenter" || h.kind === "diskRadius") {
+      if (candidate.kind !== "disk") return null;
+      cx = candidate.cx; cy = candidate.cy; rad = candidate.r;
+    } else {
+      if (h.selection.kind !== "hole") return null;
+      const hole = candidate.holes[h.selection.index];
+      if (!hole || hole.kind !== "circle") return null;
+      cx = hole.cx; cy = hole.cy; rad = hole.r;
     }
-    return null;
+
+    // For a radius drag, the circumference dot tracks the user's cursor so
+    // any direction grows/shrinks the circle visibly (consistent with Add
+    // Hole). For a center drag, the cursor IS the center — pick an arbitrary
+    // angle so the ghost still has a circumference marker.
+    const cursor = isRadiusDrag && this.cursorWorld
+      ? this.snapWorld(this.cursorWorld)
+      : { x: cx + rad, y: cy };
+    return { kind: "add-hole", anchor: { x: cx, y: cy }, cursor, snapping: this.snap };
   }
 
   private pickPrimAt(w: Vec2): Selection | null {

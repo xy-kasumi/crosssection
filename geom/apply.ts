@@ -82,7 +82,6 @@ export function apply(base: AuthoringShape, op: Op): ApplyResult {
     case "move-disk-radius":  return moveDiskRadius(base, op.r);
     case "move-hole-center":  return moveHoleCenter(base, op.index, op.target);
     case "move-hole-radius":  return moveHoleRadius(base, op.index, op.r);
-    case "translate-prim":    return translatePrim(base, op.sel, op.delta);
   }
 }
 
@@ -385,45 +384,6 @@ function reAddCircleHole(
         outers: base.outers.map(cloneOutline),
         holes: base.holes.filter((_, i) => i !== index) };
   return addHoleAt(withoutTarget, { x: cx, y: cy }, r);
-}
-
-// ----- translate-prim -----
-//
-// Translate a circle prim (the disk or a circle hole) by `delta`. Polygon
-// outers and polygon holes don't translate — the gesture isn't natural for
-// them, and individual vertex drags cover the use case. Delta is cumulative
-// from the gesture's start; callers feed apply(dragStartShape, ...) each
-// frame with the running cursor delta. That way the gesture is trivially
-// associative and floating-point error doesn't accumulate along a long drag.
-
-function translatePrim(base: AuthoringShape, sel: Selection, delta: Vec2): ApplyResult {
-  if (sel.kind === "disk") {
-    if (base.kind !== "disk") return invalid("translate-prim disk: base is not a disk");
-    const candidate: AuthoringShape = {
-      ...base,
-      cx: base.cx + delta.x,
-      cy: base.cy + delta.y,
-      holes: [...base.holes],
-    };
-    return finalize(candidate, sel, null);
-  }
-  if (sel.kind === "outer") {
-    return invalid("translate-prim: polygon outers are not translatable");
-  }
-  // sel.kind === "hole"
-  if (sel.index < 0 || sel.index >= base.holes.length) {
-    return invalid(`translate-prim hole: index ${sel.index} out of range`);
-  }
-  const h = base.holes[sel.index]!;
-  if (h.kind !== "circle") {
-    return invalid("translate-prim: polygon holes are not translatable");
-  }
-  // Translating a circle hole goes through the re-add pipeline so crossing
-  // the outer triggers polygonization (warning) just like a direct drag of
-  // the center handle would.
-  return reAddCircleHole(base, sel.index, () => ({
-    cx: h.cx + delta.x, cy: h.cy + delta.y, r: h.r,
-  }));
 }
 
 // ----- helpers -----

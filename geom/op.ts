@@ -2,11 +2,8 @@
 // (e.g. an edge-mid click expands to insert-vert + move-vert).
 //
 // Tool-driven gestures (paint-rect, erase-rect, add-hole) keep their
-// anchor/cursor pair vocabulary. Drag-derived ops are base-relative: the
-// editor captures dragStartShape + dragStartCursor on mousedown and feeds
-// each frame's cumulative delta back through apply() against the captured
-// base. That's why translate-prim takes `delta` (cumulative) rather than a
-// per-frame step.
+// anchor/cursor pair vocabulary. There's no whole-prim translate: circles
+// move by their center handle, polygons by their vertices.
 
 import type { Selection, Vec2 } from "./shape.ts";
 
@@ -26,12 +23,6 @@ export type Op =
   // center/radius — polygonization on outer-cross is handled by the
   // shared add-hole pipeline).
   | { kind: "move-hole-center"; index: number; target: Vec2 }
-  | { kind: "move-hole-radius"; index: number; r: number }
-  // Translate a circle prim (the disk or a circle hole) as a unit. Polygon
-  // outers and polygon holes don't translate; vertex-level edits are the
-  // only mutation surface for them. Delta is cumulative from the gesture's
-  // start — not per-frame — so each frame's apply() against dragStartShape
-  // is trivially associative.
-  | { kind: "translate-prim"; sel: Selection; delta: Vec2 };
+  | { kind: "move-hole-radius"; index: number; r: number };
 
 export type OpKind = Op["kind"];

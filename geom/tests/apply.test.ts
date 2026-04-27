@@ -101,7 +101,7 @@ test("apply does not mutate the input shape", () => {
   const before = JSON.stringify(rod);
   apply(rod, { kind: "move-disk-center", target: { x: 100, y: 100 } });
   apply(rod, { kind: "add-hole", center: { x: 0, y: 0 }, cursor: { x: 1, y: 0 } });
-  apply(rod, { kind: "translate-prim", sel: { kind: "disk" }, delta: { x: 5, y: 5 } });
+  apply(rod, { kind: "move-disk-radius", r: 7 });
   assert.equal(JSON.stringify(rod), before);
 });
 
