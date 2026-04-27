@@ -1,19 +1,19 @@
-// Op union — finer than UI gestures; one mousemove may issue several Ops.
-// Every positional field is a Vec2 or scalar; no loose cx/cy/x/y.
+// Op model — see docs/editor-model.md for the vocabulary and invariants.
 //
-// Phase B: skeleton union only. Phase C populates apply() against these.
+// Phase D will fold the granular variants from the plan (move-vert,
+// move-hole-center, translate-prim, ...) in alongside editor.ts being
+// rewritten. Phase C just relocates the existing union from
+// web/src/ops.ts.
 
-import type { Selection, Vec2 } from "./shape.ts";
+import type { Vec2 } from "./shape.ts";
 
 export type Op =
-  | { readonly kind: "paint-rect"; readonly p0: Vec2; readonly p1: Vec2 }
-  | { readonly kind: "erase-rect"; readonly p0: Vec2; readonly p1: Vec2 }
-  | { readonly kind: "add-hole"; readonly center: Vec2; readonly r: number }
-  | { readonly kind: "move-vert"; readonly sel: Selection; readonly index: number; readonly target: Vec2 }
-  | { readonly kind: "move-hole-center"; readonly index: number; readonly target: Vec2 }
-  | { readonly kind: "move-hole-radius"; readonly index: number; readonly r: number }
-  | { readonly kind: "move-disk-center"; readonly target: Vec2 }
-  | { readonly kind: "move-disk-radius"; readonly r: number }
-  | { readonly kind: "translate-prim"; readonly sel: Selection; readonly delta: Vec2 }
-  | { readonly kind: "delete-vert"; readonly sel: Selection; readonly index: number }
-  | { readonly kind: "insert-vert"; readonly sel: Selection; readonly afterIndex: number };
+  | { kind: "paint-rect"; anchor: Vec2; cursor: Vec2 }
+  | { kind: "erase-rect"; anchor: Vec2; cursor: Vec2 }
+  | { kind: "add-hole";   center: Vec2; cursor: Vec2 }
+  // Circle-hole center/radius drag, treated as remove-then-add at the new
+  // (cx, cy, r). Same validity gate as add-hole, with the original hole
+  // excluded from the collision check.
+  | { kind: "move-hole";  index: number; cx: number; cy: number; r: number };
+
+export type OpKind = Op["kind"];

@@ -1,19 +1,30 @@
-// Preset constructors: `defaultDisk`, `rodOf`, `rectShapeOf`, `extrusionOf`.
-// Each returns a fully-populated AuthoringShape (composed field included).
-//
-// Phase B: stubs that satisfy the smoke test. Phase C lifts the live
-// implementations out of web/src/authoring.ts.
+// Preset constructors: starting shapes for the editor.
 
-import type { AuthoringShape, DiskShape } from "./shape.ts";
+import { rectOutline } from "./internal.ts";
+import type { DiskShape, PolygonShape } from "./shape.ts";
 
-export function rodOf(_diameter: number): AuthoringShape {
-  // Stub — Phase C replaces this with the real construction (compose included).
-  const stub: DiskShape = {
-    kind: "disk",
-    center: { x: 0, y: 0 },
-    r: _diameter / 2,
-    holes: [],
-    composed: [],
+export function defaultDisk(): DiskShape {
+  return rodOf(5);
+}
+
+export function rodOf(D: number): DiskShape {
+  return { kind: "disk", cx: 0, cy: 0, r: D / 2, holes: [] };
+}
+
+export function rectShapeOf(W: number, H: number): PolygonShape {
+  return { kind: "polygon", outers: [rectOutline(0, 0, W, H)], holes: [] };
+}
+
+// T-slot extrusion. S is the model number (e.g. 2020 → 20×20 mm). Geometry is
+// a placeholder (hollow square with 2 mm wall) — recognizable in silhouette
+// but not the actual T-slot profile. Refine when the broader UX lands.
+export function extrusionOf(S: number): PolygonShape {
+  const W = Math.max(5, Math.floor(S / 100));
+  const H = Math.max(5, S % 100);
+  const t = 2;
+  return {
+    kind: "polygon",
+    outers: [rectOutline(0, 0, W, H)],
+    holes: [{ kind: "polygon", outline: rectOutline(0, 0, W - 2 * t, H - 2 * t) }],
   };
-  return stub;
 }

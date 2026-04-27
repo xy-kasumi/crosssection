@@ -1,8 +1,9 @@
 // Public surface of the geometry kernel. Web should import from this file
 // (or the package alias `@geom`) and from nothing else under geom/.
 //
-// `compose`, `mkShape`, and the polygon-clipping helpers in `internal.ts`
-// are deliberately not re-exported.
+// Phase D will tighten the surface: `compose` becomes private, the granular
+// Op variants land, the result trichotomy gains `invalid`. Phase C exposes
+// what web/src/{authoring,ops}.ts used to expose so the shims stay thin.
 
 export type {
   Vec2,
@@ -14,9 +15,30 @@ export type {
   PolygonShape,
   AuthoringShape,
   Selection,
+  ComposeOk,
+  ComposeError,
+  ComposeResult,
+  BBox,
 } from "./shape.ts";
-export type { Op } from "./op.ts";
-export type { ApplyResult } from "./apply.ts";
+export { compose, authoringBBox } from "./shape.ts";
 
-export { apply } from "./apply.ts";
-export { rodOf } from "./presets.ts";
+export type { Op, OpKind } from "./op.ts";
+export type { ApplyResult, OpOk, OpWarning, OpError, OpResult } from "./apply.ts";
+export { apply, WARN_CIRCLE_LOST } from "./apply.ts";
+
+export {
+  defaultDisk,
+  rodOf,
+  rectShapeOf,
+  extrusionOf,
+} from "./presets.ts";
+
+// Internal helpers exposed transitionally — canvas/* still consumes them
+// while the kernel migration to a fully sealed surface is in progress.
+// Phase E removes these re-exports along with the web shims.
+export {
+  outlineToRing,
+  ringToOutline,
+  ringFromCircle,
+  rectOutline,
+} from "./internal.ts";
