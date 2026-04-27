@@ -13,6 +13,34 @@ import { DebugPane } from "./ui/debug-pane.ts";
 import { ZeroState } from "./ui/zero-state.ts";
 import { toWire } from "@solver/shape.ts";
 
+// Top-level error trap. The geom kernel surfaces unreachable-from-sound-UI
+// states ("invalid" Op results) by having editor.ts throw; the throw lands
+// here and we re-use the boot-overlay to tell the user something's wrong.
+// Pyodide boot failures still own the overlay's primary path; this just
+// piggybacks on the same UI element.
+window.addEventListener("error", (ev) => showFatalOverlay(ev.message, ev.error));
+window.addEventListener("unhandledrejection", (ev) =>
+  showFatalOverlay("unhandled promise rejection", ev.reason));
+
+function showFatalOverlay(summary: string, detail: unknown): void {
+  const overlay = document.getElementById("boot-overlay");
+  const card = document.getElementById("boot-card");
+  if (!overlay || !card) return;
+  const detailText = detail instanceof Error
+    ? `${detail.name}: ${detail.message}\n${detail.stack ?? ""}`
+    : String(detail ?? summary);
+  card.innerHTML = `
+    <div class="boot-msg">Something went wrong.</div>
+    <p>The editor hit an unexpected internal state. Reload to start fresh — your unsaved geometry will be lost.</p>
+    <button id="boot-reload" type="button">Reload</button>
+    <details><summary>Details</summary><pre id="boot-error-text"></pre></details>
+  `;
+  const errEl = document.getElementById("boot-error-text");
+  if (errEl) errEl.textContent = detailText;
+  document.getElementById("boot-reload")?.addEventListener("click", () => location.reload());
+  overlay.classList.remove("hidden");
+}
+
 const canvas = document.getElementById("cv") as HTMLCanvasElement;
 
 const editor = new Editor(canvas, defaultDisk(), {

@@ -3,7 +3,7 @@
 // shape, with click-to-select and ✕-to-delete. Explicitly debug, not
 // product UI: don't pour design effort here.
 
-import { rectOutline, type Selection } from "../authoring.ts";
+import { rectOutline, type AuthoringShape, type Selection } from "../authoring.ts";
 import type { Editor } from "../editor.ts";
 
 export class DebugPane {
@@ -84,16 +84,24 @@ export class DebugPane {
   }
 
   private deletePrim(sel: Selection): void {
-    this.editor.mutate((s) => {
-      if (sel.kind === "outer" && s.kind === "polygon") {
-        s.outers.splice(sel.index, 1);
-        // If the user deleted the last outer, reset back to a default.
-        if (s.outers.length === 0) s.outers.push(rectOutline(0, 0, 10, 10));
-      } else if (sel.kind === "hole") {
-        s.holes.splice(sel.index, 1);
-      }
-      this.editor.setSelection(null);
-    });
+    // Build the post-delete shape externally — debug-pane is the only path
+    // that prunes a whole prim, so it's not worth a dedicated Op variant.
+    // The editor's setShape() then takes the fresh shape atomically.
+    const s = this.editor.getShape();
+    let next: AuthoringShape | null = null;
+    if (sel.kind === "outer" && s.kind === "polygon") {
+      const outers = s.outers.filter((_, i) => i !== sel.index);
+      // If the user deleted the last outer, reset back to a default rect so
+      // the shape stays composable.
+      const safeOuters = outers.length === 0 ? [rectOutline(0, 0, 10, 10)] : outers;
+      next = { kind: "polygon", outers: safeOuters, holes: [...s.holes] };
+    } else if (sel.kind === "hole") {
+      const holes = s.holes.filter((_, i) => i !== sel.index);
+      next = s.kind === "disk"
+        ? { ...s, holes }
+        : { kind: "polygon", outers: s.outers.map((o) => o.map((p) => ({ x: p.x, y: p.y }))), holes };
+    }
+    if (next) this.editor.setShape(next);
   }
 }
 

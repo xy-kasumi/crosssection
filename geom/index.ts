@@ -23,7 +23,7 @@ export type {
 export { compose, authoringBBox } from "./shape.ts";
 
 export type { Op, OpKind } from "./op.ts";
-export type { ApplyResult, OpOk, OpWarning, OpError, OpResult } from "./apply.ts";
+export type { ApplyResult, OpOk, OpWarning, OpError, OpInvalid, OpResult } from "./apply.ts";
 export { apply, WARN_CIRCLE_LOST } from "./apply.ts";
 
 export {

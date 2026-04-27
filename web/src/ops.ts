@@ -8,6 +8,7 @@ export {
   type OpOk,
   type OpWarning,
   type OpError,
+  type OpInvalid,
   type OpResult,
   type ApplyResult,
   apply as previewOp,

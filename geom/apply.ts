@@ -1,13 +1,18 @@
-// apply(base, op) → ApplyResult — the previewOp pipeline that web/src/ops.ts
-// used to host. Renamed to `apply` per the plan; the four-case trichotomy
-// (ok / warn / err / invalid) and granular Op variants land in Phase D
-// when editor.ts is rewritten.
+// apply(base, op) → ApplyResult — every shape mutation in the editor goes
+// through this function. The four-case trichotomy:
+//
+//   ok      — clean commit; new shape returned.
+//   warning — committable but lossy (a circle prim becomes a polygon).
+//   error   — user intent rejected (zero-area, would-disconnect, ...).
+//   invalid — bug; UI shouldn't reach here. Editor logs + throws; the
+//             top-level window.onerror handler shows the boot-overlay.
 //
 // Invariants:
 //   - apply is pure: it builds a *new* candidate shape, never edits the
 //     base. Discarded ops therefore leave the base untouched by construction.
-//   - "ok" implies the candidate is composable. We use compose() itself as
-//     the final oracle, so what we hand back can always be drawn and solved.
+//   - "ok" and "warning" both imply the candidate is composable. We use
+//     compose() itself as the final oracle, so what we hand back can always
+//     be drawn and solved.
 
 import polygonClipping, { type MultiPolygon } from "polygon-clipping";
 
@@ -22,6 +27,7 @@ import {
 import { compose } from "./shape.ts";
 import type {
   AuthoringShape,
+  CircleHole,
   Hole,
   Outline,
   PolygonShape,
@@ -30,15 +36,6 @@ import type {
 } from "./shape.ts";
 import type { Op } from "./op.ts";
 
-// Op results have three states:
-//   ok      — commit cleanly, no caveats
-//   warning — commit, but the user-visible model lost something (a circle
-//             hole became a polygon — they'll lose the ability to drag its
-//             center / radius). Single message; we don't categorize beyond
-//             "circle-ness lost" because that's the only consequence the
-//             user actually feels.
-//   error   — cannot commit. Only three causes: zero-area op, would erase
-//             everything, would disconnect the shape into pieces.
 export interface OpOk {
   kind: "ok";
   shape: AuthoringShape;
@@ -59,8 +56,18 @@ export interface OpError {
   reason: string;
 }
 
-export type OpResult = OpOk | OpWarning | OpError;
-export type ApplyResult = OpResult; // Phase D extends with `invalid`.
+// "invalid" is for unreachable-from-sound-UI cases: an Op that references a
+// vertex/hole index that doesn't exist, or asks for an operation on a prim
+// kind that doesn't support it (e.g. move-hole-center on a polygon hole).
+// editor.ts logs + throws on this; window.onerror surfaces the boot-overlay.
+export interface OpInvalid {
+  kind: "invalid";
+  reason: string;
+}
+
+export type ApplyResult = OpOk | OpWarning | OpError | OpInvalid;
+// Legacy alias kept while web/src/ops.ts shim is in place; Phase E removes.
+export type OpResult = ApplyResult;
 
 // The one warning message the editor uses today. Centralized so it stays
 // consistent across ops and easy to tweak. User-facing language: name the
@@ -68,16 +75,21 @@ export type ApplyResult = OpResult; // Phase D extends with `invalid`.
 export const WARN_CIRCLE_LOST = "circle hole will become a polygon — you'll lose drag-center and drag-radius";
 
 const MIN_DIM = 0.05; // mm — anything smaller than this is treated as zero
+const MIN_RADIUS = 0.1;
 
-// Public: compute the candidate shape for an op against the given base.
-// Returns "ok" with a shape that is guaranteed composable (compose() is the
-// validation oracle), or "error" with a human-readable reason.
 export function apply(base: AuthoringShape, op: Op): ApplyResult {
   switch (op.kind) {
-    case "paint-rect": return previewPaintRect(base, op.anchor, op.cursor);
-    case "erase-rect": return previewEraseRect(base, op.anchor, op.cursor);
-    case "add-hole":   return previewAddHole(base, op.center, op.cursor);
-    case "move-hole":  return previewMoveHole(base, op.index, op.cx, op.cy, op.r);
+    case "paint-rect":        return previewPaintRect(base, op.anchor, op.cursor);
+    case "erase-rect":        return previewEraseRect(base, op.anchor, op.cursor);
+    case "add-hole":          return previewAddHole(base, op.center, op.cursor);
+    case "move-vert":         return moveVert(base, op.sel, op.index, op.target);
+    case "delete-vert":       return deleteVert(base, op.sel, op.index);
+    case "insert-vert":       return insertVert(base, op.sel, op.afterIndex);
+    case "move-disk-center":  return moveDiskCenter(base, op.target);
+    case "move-disk-radius":  return moveDiskRadius(base, op.r);
+    case "move-hole-center":  return moveHoleCenter(base, op.index, op.target);
+    case "move-hole-radius":  return moveHoleRadius(base, op.index, op.r);
+    case "translate-prim":    return translatePrim(base, op.sel, op.delta);
   }
 }
 
@@ -202,6 +214,10 @@ function previewEraseRect(base: AuthoringShape, p1: Vec2, p2: Vec2): ApplyResult
 
 function previewAddHole(base: AuthoringShape, center: Vec2, edge: Vec2): ApplyResult {
   const r = Math.hypot(edge.x - center.x, edge.y - center.y);
+  return addHoleAt(base, center, r);
+}
+
+function addHoleAt(base: AuthoringShape, center: Vec2, r: number): ApplyResult {
   if (r < MIN_DIM) return err("hole has zero radius");
 
   const outerMP = outerMultiPolygonOf(base);
@@ -276,27 +292,146 @@ function previewAddHole(base: AuthoringShape, center: Vec2, edge: Vec2): ApplyRe
   return finalize(candidate, preselect, WARN_CIRCLE_LOST);
 }
 
-// ----- move-hole -----
+// ----- move-vert / delete-vert / insert-vert -----
+
+function moveVert(base: AuthoringShape, sel: Selection, index: number, target: Vec2): ApplyResult {
+  const ol = outlineForSel(base, sel);
+  if (ol === null) return invalid(`move-vert: selection ${selDesc(sel)} has no editable outline`);
+  if (index < 0 || index >= ol.length) return invalid(`move-vert: index ${index} out of range (length ${ol.length})`);
+  const newOl = ol.map((p, i) => (i === index ? { x: target.x, y: target.y } : { x: p.x, y: p.y }));
+  const candidate = withOutlineReplaced(base, sel, newOl);
+  if (!candidate) return invalid(`move-vert: failed to apply outline to selection ${selDesc(sel)}`);
+  return finalize(candidate, sel, null);
+}
+
+function deleteVert(base: AuthoringShape, sel: Selection, index: number): ApplyResult {
+  const ol = outlineForSel(base, sel);
+  if (ol === null) return invalid(`delete-vert: selection ${selDesc(sel)} has no editable outline`);
+  if (index < 0 || index >= ol.length) return invalid(`delete-vert: index ${index} out of range`);
+  if (ol.length <= 3) return err("can't delete vertex — outline must keep at least 3 points");
+  const newOl = ol.filter((_, i) => i !== index).map((p) => ({ x: p.x, y: p.y }));
+  const candidate = withOutlineReplaced(base, sel, newOl);
+  if (!candidate) return invalid(`delete-vert: failed to apply outline to selection ${selDesc(sel)}`);
+  return finalize(candidate, sel, null);
+}
+
+function insertVert(base: AuthoringShape, sel: Selection, afterIndex: number): ApplyResult {
+  const ol = outlineForSel(base, sel);
+  if (ol === null) return invalid(`insert-vert: selection ${selDesc(sel)} has no editable outline`);
+  if (afterIndex < 0 || afterIndex >= ol.length) return invalid(`insert-vert: afterIndex ${afterIndex} out of range`);
+  const p = ol[afterIndex]!;
+  const q = ol[(afterIndex + 1) % ol.length]!;
+  const mid: Vec2 = { x: (p.x + q.x) / 2, y: (p.y + q.y) / 2 };
+  const newOl: Outline = [
+    ...ol.slice(0, afterIndex + 1).map((v) => ({ x: v.x, y: v.y })),
+    mid,
+    ...ol.slice(afterIndex + 1).map((v) => ({ x: v.x, y: v.y })),
+  ];
+  const candidate = withOutlineReplaced(base, sel, newOl);
+  if (!candidate) return invalid(`insert-vert: failed to apply outline to selection ${selDesc(sel)}`);
+  return finalize(candidate, { ...sel, ...(sel.kind !== "disk" ? {} : {}) }, null);
+}
+
+// ----- move-disk-* -----
+
+function moveDiskCenter(base: AuthoringShape, target: Vec2): ApplyResult {
+  if (base.kind !== "disk") return invalid("move-disk-center: base is not a disk");
+  const candidate: AuthoringShape = { ...base, cx: target.x, cy: target.y, holes: [...base.holes] };
+  return finalize(candidate, { kind: "disk" }, null);
+}
+
+function moveDiskRadius(base: AuthoringShape, r: number): ApplyResult {
+  if (base.kind !== "disk") return invalid("move-disk-radius: base is not a disk");
+  if (r < MIN_RADIUS) return err("disk radius too small");
+  const candidate: AuthoringShape = { ...base, r, holes: [...base.holes] };
+  return finalize(candidate, { kind: "disk" }, null);
+}
+
+// ----- move-hole-* -----
 //
 // Hole drag = remove this circle hole, then re-add a circle at the new
 // (cx, cy, r). Reuses the add-hole pipeline so validity rules are identical:
 // crossing the outer or hitting another hole produces a warning + polygon
-// conversion; entirely outside is an error. Caller is the editor's drag
-// loop, which today commits only on "ok" (mid-drag polygon-conversion would
-// invalidate the live drag handles).
+// conversion; entirely outside is an error.
 
-function previewMoveHole(
-  base: AuthoringShape, index: number, cx: number, cy: number, r: number,
+function moveHoleCenter(base: AuthoringShape, index: number, target: Vec2): ApplyResult {
+  return reAddCircleHole(base, index, (h) => ({ cx: target.x, cy: target.y, r: h.r }));
+}
+
+function moveHoleRadius(base: AuthoringShape, index: number, r: number): ApplyResult {
+  if (r < MIN_RADIUS) return err("hole radius too small");
+  return reAddCircleHole(base, index, (h) => ({ cx: h.cx, cy: h.cy, r }));
+}
+
+function reAddCircleHole(
+  base: AuthoringShape,
+  index: number,
+  next: (h: CircleHole) => { cx: number; cy: number; r: number },
 ): ApplyResult {
   const target = base.holes[index];
-  if (!target || target.kind !== "circle") return err("can only move-hole a circle hole");
-
+  if (!target) return invalid(`hole index ${index} out of range (length ${base.holes.length})`);
+  if (target.kind !== "circle") return invalid(`hole at index ${index} is a polygon, not a circle`);
+  const { cx, cy, r } = next(target);
   const withoutTarget: AuthoringShape = base.kind === "disk"
     ? { ...base, holes: base.holes.filter((_, i) => i !== index) }
     : { kind: "polygon",
         outers: base.outers.map(cloneOutline),
         holes: base.holes.filter((_, i) => i !== index) };
-  return previewAddHole(withoutTarget, { x: cx, y: cy }, { x: cx + r, y: cy });
+  return addHoleAt(withoutTarget, { x: cx, y: cy }, r);
+}
+
+// ----- translate-prim -----
+//
+// Move the named prim by `delta`. Other prims stay put. Delta is cumulative
+// from the gesture's start: callers feed apply(dragStartShape, ...) each
+// frame with the running cursor delta, never chaining one frame's result
+// into the next. That way the gesture is trivially associative and we
+// don't accumulate floating-point error along a long drag.
+
+function translatePrim(base: AuthoringShape, sel: Selection, delta: Vec2): ApplyResult {
+  if (sel.kind === "disk") {
+    if (base.kind !== "disk") return invalid("translate-prim disk: base is not a disk");
+    const candidate: AuthoringShape = {
+      ...base,
+      cx: base.cx + delta.x,
+      cy: base.cy + delta.y,
+      holes: [...base.holes],
+    };
+    return finalize(candidate, sel, null);
+  }
+  if (sel.kind === "outer") {
+    if (base.kind !== "polygon") return invalid("translate-prim outer: base is not a polygon");
+    if (sel.index < 0 || sel.index >= base.outers.length) {
+      return invalid(`translate-prim outer: index ${sel.index} out of range`);
+    }
+    const newOuters = base.outers.map((o, i) =>
+      i === sel.index ? o.map((p) => ({ x: p.x + delta.x, y: p.y + delta.y })) : cloneOutline(o));
+    const candidate: AuthoringShape = { kind: "polygon", outers: newOuters, holes: [...base.holes] };
+    return finalize(candidate, sel, null);
+  }
+  // sel.kind === "hole"
+  if (sel.index < 0 || sel.index >= base.holes.length) {
+    return invalid(`translate-prim hole: index ${sel.index} out of range`);
+  }
+  const h = base.holes[sel.index]!;
+  if (h.kind === "circle") {
+    // Translating a circle hole goes through the re-add pipeline so
+    // crossing the outer triggers polygonization (warning) just like a
+    // direct drag of the center handle would.
+    return reAddCircleHole(base, sel.index, () => ({
+      cx: h.cx + delta.x, cy: h.cy + delta.y, r: h.r,
+    }));
+  }
+  // Polygon hole: translate every vertex.
+  const newHole: Hole = {
+    kind: "polygon",
+    outline: h.outline.map((p) => ({ x: p.x + delta.x, y: p.y + delta.y })),
+  };
+  const newHoles = base.holes.map((hh, i) => (i === sel.index ? newHole : hh));
+  const candidate: AuthoringShape = base.kind === "disk"
+    ? { ...base, holes: newHoles }
+    : { kind: "polygon", outers: base.outers.map(cloneOutline), holes: newHoles };
+  return finalize(candidate, sel, null);
 }
 
 // ----- helpers -----
@@ -317,6 +452,48 @@ function cloneOutline(o: Outline): Outline {
   return o.map((p) => ({ x: p.x, y: p.y }));
 }
 
+// Look up the polygon outline a Selection refers to, or null if the selected
+// prim doesn't have an editable outline (disk, circle hole). Returns the
+// live array — callers must clone before mutating.
+function outlineForSel(s: AuthoringShape, sel: Selection): Outline | null {
+  if (sel.kind === "outer") {
+    if (s.kind !== "polygon") return null;
+    return s.outers[sel.index] ?? null;
+  }
+  if (sel.kind === "hole") {
+    const h = s.holes[sel.index];
+    if (!h || h.kind !== "polygon") return null;
+    return h.outline;
+  }
+  return null;
+}
+
+// Replace the outline at `sel` with `newOl`, returning a fresh shape. Other
+// prims are cloned so the caller's input is never mutated.
+function withOutlineReplaced(s: AuthoringShape, sel: Selection, newOl: Outline): AuthoringShape | null {
+  if (sel.kind === "outer") {
+    if (s.kind !== "polygon") return null;
+    if (sel.index < 0 || sel.index >= s.outers.length) return null;
+    const newOuters = s.outers.map((o, i) => (i === sel.index ? newOl : cloneOutline(o)));
+    return { kind: "polygon", outers: newOuters, holes: [...s.holes] };
+  }
+  if (sel.kind === "hole") {
+    if (sel.index < 0 || sel.index >= s.holes.length) return null;
+    const target = s.holes[sel.index]!;
+    if (target.kind !== "polygon") return null;
+    const newHole: Hole = { kind: "polygon", outline: newOl };
+    const newHoles = s.holes.map((hh, i) => (i === sel.index ? newHole : hh));
+    if (s.kind === "disk") return { ...s, holes: newHoles };
+    return { kind: "polygon", outers: s.outers.map(cloneOutline), holes: newHoles };
+  }
+  return null;
+}
+
+function selDesc(sel: Selection): string {
+  if (sel.kind === "disk") return "disk";
+  return `${sel.kind}#${sel.index}`;
+}
+
 // Final gate: compose() is the production validation oracle. If it accepts
 // the candidate, the editor can commit it and the FEM solver will accept
 // it too. `warning` is non-null when the op produced a result that commits
@@ -335,4 +512,8 @@ function finalize(
 
 function err(reason: string): OpError {
   return { kind: "error", reason };
+}
+
+function invalid(reason: string): OpInvalid {
+  return { kind: "invalid", reason };
 }
