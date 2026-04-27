@@ -364,6 +364,18 @@ for (const b of els.toolBtns) {
 
 els.snapToggle.addEventListener("change", () => editor.setSnap(els.snapToggle.checked));
 
+// Space toggles snap. Skip when focus is in a text/number input so typing a
+// space in the size-input field still works as text entry.
+window.addEventListener("keydown", (ev) => {
+  if (ev.code !== "Space") return;
+  const t = ev.target as HTMLElement | null;
+  if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+  if (editor.isZeroState()) return;
+  ev.preventDefault();
+  els.snapToggle.checked = !els.snapToggle.checked;
+  editor.setSnap(els.snapToggle.checked);
+});
+
 function toolHintText(state: ToolState): string {
   if (state.phase === "wait-anchor") {
     if (state.kind === "add-hole") return "Click center";

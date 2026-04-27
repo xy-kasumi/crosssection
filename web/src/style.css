@@ -209,6 +209,14 @@ main {
   user-select: none;
 }
 .snap-toggle input { margin: 0; cursor: pointer; }
+.kbd-hint {
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  font-size: 10px;
+  padding: 1px 5px;
+  border: 1px solid var(--border, #ccc);
+  border-radius: 3px;
+  opacity: 0.6;
+}
 .tool-hint {
   font-size: 11px;
   opacity: 0.6;
