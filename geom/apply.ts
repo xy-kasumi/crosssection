@@ -20,7 +20,6 @@ import {
   holesMultiPolygon,
   outerMultiPolygonOf,
   outlineToRing,
-  rectOutline,
   ringFromCircle,
   ringToOutline,
 } from "./internal.ts";
@@ -30,7 +29,6 @@ import type {
   CircleHole,
   Hole,
   Outline,
-  PolygonShape,
   Selection,
   Vec2,
 } from "./shape.ts";
@@ -67,10 +65,12 @@ export interface OpInvalid {
 
 export type ApplyResult = OpOk | OpWarning | OpError | OpInvalid;
 
-// The one warning message the editor uses today. Centralized so it stays
-// consistent across ops and easy to tweak. User-facing language: name the
-// consequence (loss of drag-center/drag-radius), not the type change.
-export const WARN_CIRCLE_LOST = "circle hole will become a polygon — you'll lose drag-center and drag-radius";
+// The one warning the kernel surfaces today. Triggered whenever a circle
+// prim (the disk outer or a circle hole) loses its circle identity to a
+// polygon. User-facing language names the consequence (loss of drag-center
+// / drag-radius), not the type change. Centralized so it stays consistent
+// across ops.
+export const WARN_CIRCLE_LOST = "circle prim will become a polygon — you'll lose drag-center and drag-radius";
 
 const MIN_DIM = 0.05; // mm — anything smaller than this is treated as zero
 const MIN_RADIUS = 0.1;
@@ -97,21 +97,16 @@ function previewPaintRect(base: AuthoringShape, p1: Vec2, p2: Vec2): ApplyResult
   const rect = rectFromCorners(p1, p2);
   if (!rect) return err("rectangle has zero area");
 
-  // Disk → swap to inscribed-rect polygon so we have a polygon to union into.
-  // Same UX choice as before; documented in the model.
-  const polyBase: PolygonShape = base.kind === "disk"
-    ? { kind: "polygon",
-        outers: [rectOutline(base.cx, base.cy, base.r * Math.SQRT2, base.r * Math.SQRT2)],
-        holes: [...base.holes] }
-    : { kind: "polygon", outers: base.outers.map(cloneOutline), holes: [...base.holes] };
+  // Disks are polygonized via the same 64-sided approximation that compose()
+  // produces, so the union and overlap test work against the actual disk
+  // boundary — not an inscribed square that excludes 36% of the area.
+  const baseOuterMP = outerMultiPolygonOf(base);
+  const wasDisk = base.kind === "disk";
 
-  // Union the new rect into the existing outer(s). polygon-clipping returns
-  // a MultiPolygon; if the user's rect doesn't overlap any existing outer
-  // we get >1 piece, which is a disconnected shape and an op error.
-  const outerMP: MultiPolygon = polygonClipping.union(
-    ...polyBase.outers.map((o): MultiPolygon => [[outlineToRing(o)]]),
-    [[outlineToRing(rect)]],
-  );
+  // Union the new rect with the base outer(s). polygon-clipping returns
+  // a MultiPolygon; >1 piece means the user's rect didn't overlap any outer
+  // and would create a disconnected shape.
+  const outerMP: MultiPolygon = polygonClipping.union(baseOuterMP, [[outlineToRing(rect)]]);
   if (outerMP.length === 0) return err("paint produced empty outer (impossible?)");
   if (outerMP.length > 1)   return err("rect doesn't overlap the existing shape (would create disconnected piece)");
 
@@ -127,10 +122,10 @@ function previewPaintRect(base: AuthoringShape, p1: Vec2, p2: Vec2): ApplyResult
   const candidate: AuthoringShape = {
     kind: "polygon",
     outers: [newOuter],
-    holes: [...polyBase.holes, ...computedHoles],
+    holes: [...base.holes, ...computedHoles],
   };
 
-  return finalize(candidate, { kind: "outer", index: 0 }, null);
+  return finalize(candidate, { kind: "outer", index: 0 }, wasDisk ? WARN_CIRCLE_LOST : null);
 }
 
 // ----- erase-rect -----
@@ -142,21 +137,26 @@ function previewPaintRect(base: AuthoringShape, p1: Vec2, p2: Vec2): ApplyResult
 // uniformly. Two overlapping erase-rects naturally merge because we always
 // recompute from the live filled region.
 //
-// If the erase touches an existing circle hole, that circle's identity is
-// dissolved — the new polygon-hole carries it forward — and we emit a
-// warning so the user knows they've lost drag-center / drag-radius on it.
+// Any circle prim whose identity gets dissolved by this op (a touched circle
+// hole, or the disk outer itself) triggers the warning so the user knows
+// drag-center / drag-radius is gone.
 
 function previewEraseRect(base: AuthoringShape, p1: Vec2, p2: Vec2): ApplyResult {
   const rect = rectFromCorners(p1, p2);
   if (!rect) return err("rectangle has zero area");
   const rectMP: MultiPolygon = [[outlineToRing(rect)]];
 
-  // Detect circle holes the rect touches; their circle identity is consumed.
-  let consumesCircle = false;
-  for (const h of base.holes) {
-    if (h.kind !== "circle") continue;
-    const overlap = polygonClipping.intersection(rectMP, [[ringFromCircle(h.cx, h.cy, h.r)]]);
-    if (overlap.length > 0) { consumesCircle = true; break; }
+  // Detect circle prims whose identity is consumed by this op:
+  //   - any circle hole the rect touches
+  //   - the disk outer itself, when the base is a disk (the result is always
+  //     a polygon — we don't try to reconstruct a disk from the difference).
+  let consumesCircle = base.kind === "disk";
+  if (!consumesCircle) {
+    for (const h of base.holes) {
+      if (h.kind !== "circle") continue;
+      const overlap = polygonClipping.intersection(rectMP, [[ringFromCircle(h.cx, h.cy, h.r)]]);
+      if (overlap.length > 0) { consumesCircle = true; break; }
+    }
   }
 
   // Build the current filled region (outer \ all-holes), then subtract rect.
