@@ -67,13 +67,14 @@ export type ApplyResult = OpOk | OpWarning | OpError | OpInvalid;
 
 // The one warning the kernel surfaces today. Triggered whenever a circle
 // prim (the disk outer or a circle hole) loses its circle identity to a
-// polygon. User-facing language names the consequence (loss of drag-center
-// / drag-radius), not the type change. Centralized so it stays consistent
-// across ops.
+// polygon. Centralized so it stays consistent across ops.
 export const WARN_CIRCLE_LOST = "circle prim will become a polygon — you'll lose drag-center and drag-radius";
 
-const MIN_DIM = 0.05; // mm — anything smaller than this is treated as zero
-const MIN_RADIUS = 0.1;
+// Op-validity convention:
+//   - degenerate ops (rectangle with zero width or height; radius == 0) are
+//     valid and return ok with the base unchanged. UI doesn't have to clamp.
+//   - negative radius / NaN can only come from a buggy op-builder; those are
+//     invalid (the editor crashes via window.onerror).
 
 export function apply(base: AuthoringShape, op: Op): ApplyResult {
   switch (op.kind) {
@@ -95,7 +96,7 @@ export function apply(base: AuthoringShape, op: Op): ApplyResult {
 
 function paintRect(base: AuthoringShape, p1: Vec2, p2: Vec2): ApplyResult {
   const rect = rectFromCorners(p1, p2);
-  if (!rect) return err("rectangle has zero area");
+  if (!rect) return noop(base);
 
   // Disks are polygonized via the same 64-sided approximation that compose()
   // produces, so the union and overlap test work against the actual disk
@@ -143,7 +144,7 @@ function paintRect(base: AuthoringShape, p1: Vec2, p2: Vec2): ApplyResult {
 
 function eraseRect(base: AuthoringShape, p1: Vec2, p2: Vec2): ApplyResult {
   const rect = rectFromCorners(p1, p2);
-  if (!rect) return err("rectangle has zero area");
+  if (!rect) return noop(base);
   const rectMP: MultiPolygon = [[outlineToRing(rect)]];
 
   // Detect circle prims whose identity is consumed by this op:
@@ -216,7 +217,8 @@ function addHole(base: AuthoringShape, center: Vec2, edge: Vec2): ApplyResult {
 }
 
 function addHoleAt(base: AuthoringShape, center: Vec2, r: number): ApplyResult {
-  if (r < MIN_DIM) return err("hole has zero radius");
+  if (r === 0) return noop(base);
+  if (!(r > 0)) return invalid(`add-hole: invalid radius ${r}`);
 
   const outerMP = outerMultiPolygonOf(base);
   const holeRing = ringFromCircle(center.x, center.y, r);
@@ -340,7 +342,8 @@ function moveDiskCenter(base: AuthoringShape, target: Vec2): ApplyResult {
 
 function moveDiskRadius(base: AuthoringShape, r: number): ApplyResult {
   if (base.kind !== "disk") return invalid("move-disk-radius: base is not a disk");
-  if (r < MIN_RADIUS) return err("disk radius too small");
+  if (r === 0) return noop(base);
+  if (!(r > 0)) return invalid(`move-disk-radius: invalid radius ${r}`);
   const candidate: AuthoringShape = { ...base, r, holes: [...base.holes] };
   return finalize(candidate, { kind: "disk" }, null);
 }
@@ -357,7 +360,11 @@ function moveHoleCenter(base: AuthoringShape, index: number, target: Vec2): Appl
 }
 
 function moveHoleRadius(base: AuthoringShape, index: number, r: number): ApplyResult {
-  if (r < MIN_RADIUS) return err("hole radius too small");
+  const target = base.holes[index];
+  if (!target) return invalid(`hole index ${index} out of range (length ${base.holes.length})`);
+  if (target.kind !== "circle") return invalid(`hole at index ${index} is a polygon, not a circle`);
+  if (r === 0) return noop(base);
+  if (!(r > 0)) return invalid(`move-hole-radius: invalid radius ${r}`);
   return reAddCircleHole(base, index, (h) => ({ cx: h.cx, cy: h.cy, r }));
 }
 
@@ -437,7 +444,7 @@ function translatePrim(base: AuthoringShape, sel: Selection, delta: Vec2): Apply
 function rectFromCorners(p1: Vec2, p2: Vec2): Outline | null {
   const x0 = Math.min(p1.x, p2.x), x1 = Math.max(p1.x, p2.x);
   const y0 = Math.min(p1.y, p2.y), y1 = Math.max(p1.y, p2.y);
-  if (x1 - x0 < MIN_DIM || y1 - y0 < MIN_DIM) return null;
+  if (x1 === x0 || y1 === y0) return null;
   return [
     { x: x0, y: y0 },
     { x: x1, y: y0 },
@@ -514,4 +521,10 @@ function err(reason: string): OpError {
 
 function invalid(reason: string): OpInvalid {
   return { kind: "invalid", reason };
+}
+
+// Returned for degenerate-but-valid ops (zero-area rect, zero radius).
+// Same shape as in, no preselect change — UI keeps the cursor where it was.
+function noop(base: AuthoringShape): OpOk {
+  return { kind: "ok", shape: base, preselect: null };
 }

@@ -99,3 +99,45 @@ test("apply does not mutate the input shape", () => {
   apply(rod, { kind: "translate-prim", sel: { kind: "disk" }, delta: { x: 5, y: 5 } });
   assert.equal(JSON.stringify(rod), before);
 });
+
+// 0-op contract: degenerate gestures are silently ok, returning the base
+// unchanged by reference. Keeps editor.ts free of "is this drag big enough?"
+// guards.
+
+test("paint-rect with anchor==cursor → ok, base unchanged", () => {
+  const rod = rodOf(5);
+  const r = apply(rod, { kind: "paint-rect", anchor: { x: 0, y: 0 }, cursor: { x: 0, y: 0 } });
+  assert.equal(r.kind, "ok");
+  if (r.kind !== "ok") return;
+  assert.equal(r.shape, rod);
+});
+
+test("erase-rect with zero-width drag → ok, base unchanged", () => {
+  const rect = rectShapeOf(10, 20);
+  const r = apply(rect, { kind: "erase-rect", anchor: { x: 1, y: 0 }, cursor: { x: 1, y: 5 } });
+  assert.equal(r.kind, "ok");
+  if (r.kind !== "ok") return;
+  assert.equal(r.shape, rect);
+});
+
+test("add-hole with cursor==center → ok, base unchanged", () => {
+  const rod = rodOf(5);
+  const r = apply(rod, { kind: "add-hole", center: { x: 0, y: 0 }, cursor: { x: 0, y: 0 } });
+  assert.equal(r.kind, "ok");
+  if (r.kind !== "ok") return;
+  assert.equal(r.shape, rod);
+});
+
+test("move-disk-radius r=0 → ok, base unchanged (silent revert)", () => {
+  const rod = rodOf(5);
+  const r = apply(rod, { kind: "move-disk-radius", r: 0 });
+  assert.equal(r.kind, "ok");
+  if (r.kind !== "ok") return;
+  assert.equal(r.shape, rod);
+});
+
+test("move-disk-radius r<0 → invalid (only a buggy op-builder produces this)", () => {
+  const rod = rodOf(5);
+  const r = apply(rod, { kind: "move-disk-radius", r: -1 });
+  assert.equal(r.kind, "invalid");
+});
