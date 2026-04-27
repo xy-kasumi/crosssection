@@ -4,6 +4,10 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>crosssection</title>
+    <!-- Pyodide runtime + stdlib + numpy/scipy/shapely come from jsdelivr.
+         Open the connection eagerly so it's warm by the time the worker boots. -->
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
+    <link rel="dns-prefetch" href="https://cdn.jsdelivr.net" />
     <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
