@@ -5,7 +5,7 @@ In-browser calculator for 2D cross-section properties: **Iₓ**, **Iᵧ** (secon
 ## Status
 
 - **Core compute + CLI test battery**: working. `npm test` runs five preset shapes through the Pyodide solver; expected values cite external references (closed forms, Roark, Timoshenko & Goodier) — no self-computed regression baselines.
-- **Browser UI** (`web/`): direct-manipulation editor with rod/rectangle/extrusion presets, Paint/Erase/Add-Hole tools, snap-to-grid, and an animated zero-state landing that hides Pyodide boot time behind a closed-form-numbers carousel. Three readouts (Iₓ, Iᵧ, J) update on every edit.
+- **Browser UI** (`web/`): direct-manipulation editor with rod/rectangle/extrusion presets, Paint/Erase/Add-Hole tools, snap-to-grid, and an animated zero-state landing that hides Pyodide boot time behind a closed-form-numbers carousel. Three readouts (Iₓ, Iᵧ, J) update on every edit. Editor mental model + op trichotomy: see [`docs/editor-model.md`](docs/editor-model.md).
 
 ## Layout
 
@@ -21,10 +21,11 @@ web/              Browser UI. Self-contained subdir with its own package.json.
                     src/core-boot.ts     Pyodide worker lifecycle + boot-failure UI
                     src/core-worker.ts   the Pyodide worker (boots from CDN)
                     src/editor.ts        shape edit engine (drag, hit-test, tools)
+                    src/ops.ts           op model: previewOp(base, op) → ok/warning/error
                     src/view-animator.ts halfSpan tween + zero-state RAF
                     src/canvas/          paint pipeline (grid, shape, handles, ...)
-                    src/ui/              panels: start-pane, toolbar, readouts,
-                                         debug-pane, zero-state
+                    src/ui/              panels: start-pane, toolbar, canvas-status,
+                                         readouts, debug-pane, zero-state
 scripts/          Diagnostic spike scripts (probe-*, m0-*).
 ```
 
@@ -59,7 +60,7 @@ npm install
 npm run dev         # vite dev server at http://localhost:5173/
 ```
 
-On first load, a muted carousel of demo cross-sections plays in the canvas while Pyodide boots. Click **Rod / Rectangle / Extrusion** in the left pane to enter the editor; a small W/H/S/D form appears over the canvas — type values, Enter confirms. Use **Paint Rect / Erase Rect / Add Hole** in the toolbar to compose; **Space** toggles snap-to-grid. Right-click a vertex to delete it; click an empty edge handle to insert one. The three readouts update after every edit; "computing…" fade indicates a solve in flight.
+On first load, a muted carousel of demo cross-sections plays in the canvas while Pyodide boots. Click **Rod / Rectangle / Extrusion** in the left pane to enter the editor; a small W/H/S/D form appears over the canvas — type values, Enter confirms. Use **Paint Rect / Erase Rect / Add Hole** in the toolbar to compose; **Space** toggles snap-to-grid. Right-click a vertex to delete it; click an empty edge handle to insert one. The status strip below the canvas surfaces tool hints, amber warnings (e.g. an op that would commit but lose a circle's drag-center/radius), and red errors (an op that would discard on commit). The three readouts update after every edit; "computing…" fade indicates a solve in flight.
 
 ### Build the browser UI
 

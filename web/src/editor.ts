@@ -11,6 +11,7 @@ import {
   draw, hitHandle, screenToWorld, targetHalfSpan,
   type Handle, type ToolKind, type ToolPreview, type View,
 } from "./canvas/index.ts";
+import { previewOp, type Op, type OpResult } from "./ops.ts";
 import { ViewAnimator } from "./view-animator.ts";
 import type { Shape as CoreShape } from "@core/shape.ts";
 
@@ -22,11 +23,21 @@ export interface ToolState {
   phase: "wait-anchor" | "wait-end";
 }
 
+// Status of the in-flight op as far as the host needs to know. Drives the
+// status strip below the canvas: gray hint when proposed, amber when the
+// committable result carries a warning, red when the op would fail.
+export type ToolStatus =
+  | { level: "valid";   message: string | null }   // null = clear / use default hint
+  | { level: "warning"; message: string }
+  | { level: "error";   message: string };
+
 export interface EditorCallbacks {
   onChange(): void;
   onSelectionChange(sel: Selection | null): void;
   onToolChange?(state: ToolState | null): void;
-  onToolCommit?(kind: ToolKind, p1: Vec2, p2: Vec2): void;
+  // Fires when the in-flight op's validity changes. The host renders this
+  // in the canvas-status strip.
+  onToolStatus?(status: ToolStatus): void;
 }
 
 export class Editor {
@@ -44,7 +55,10 @@ export class Editor {
 
   // Tool state. Mutually exclusive with drag — when a tool is active, the
   // canvas swallows clicks for tool placement (and ignores handles).
+  // lastStatus is a memo to avoid re-firing the callback on every mousemove
+  // for an unchanged value.
   private tool: { kind: ToolKind; anchor: Vec2 | null } | null = null;
+  private lastStatus: ToolStatus = { level: "valid", message: null };
   private cursorWorld: Vec2 | null = null;
   private snap = true;
 
@@ -127,9 +141,32 @@ export class Editor {
     let preview: ToolPreview | null = null;
     if (this.tool && this.cursorWorld) {
       const cursor = this.snapWorld(this.cursorWorld);
-      preview = { kind: this.tool.kind, anchor: this.tool.anchor, cursor, snapping: this.snap };
+      // Pre-anchor (still picking the first corner) we have no op to
+      // evaluate, so the ghost is shown as valid and the host shows the
+      // default "click first corner" hint.
+      let toolStatus: ToolStatus = { level: "valid", message: null };
+      if (this.tool.anchor) {
+        const op = makeOp(this.tool.kind, this.tool.anchor, cursor);
+        toolStatus = statusFromResult(previewOp(this.shape, op));
+      }
+      preview = {
+        kind: this.tool.kind, anchor: this.tool.anchor, cursor,
+        snapping: this.snap,
+        valid: toolStatus.level !== "error",
+      };
+      this.updateStatus(toolStatus);
+    } else if (!this.drag) {
+      // No tool, no drag → nothing to say. While a drag is in flight the
+      // drag handler owns the status and we leave it alone.
+      this.updateStatus({ level: "valid", message: null });
     }
     this.handles = draw(this.canvas, this.view, this.shape, this.composed, this.selection, preview);
+  }
+
+  private updateStatus(s: ToolStatus): void {
+    if (s.level === this.lastStatus.level && s.message === this.lastStatus.message) return;
+    this.lastStatus = s;
+    this.cb.onToolStatus?.(s);
   }
 
   mutate(f: (s: AuthoringShape) => void): void {
@@ -175,14 +212,23 @@ export class Editor {
         this.tool.anchor = w;
         this.cb.onToolChange?.(this.toolStateForCb());
         this.render();
-      } else {
-        const kind = this.tool.kind;
-        const anchor = this.tool.anchor;
-        this.tool = null;
-        this.cb.onToolChange?.(null);
-        this.cb.onToolCommit?.(kind, anchor, w);
-        this.render();
+        return;
       }
+      // Second click → commit on ok or warning (warnings are committable),
+      // discard on error.
+      const op = makeOp(this.tool.kind, this.tool.anchor, w);
+      const result = previewOp(this.shape, op);
+      this.tool = null;
+      this.cb.onToolChange?.(null);
+      this.updateStatus({ level: "valid", message: null });
+      if (result.kind === "ok" || result.kind === "warning") {
+        this.shape = result.shape;
+        this.selection = result.preselect ?? null;
+        this.cb.onSelectionChange(this.selection);
+        this.cb.onChange();
+        this.refit();
+      }
+      this.render();
       return;
     }
     // 1. If we hit a handle, start a handle drag.
@@ -241,9 +287,13 @@ export class Editor {
     const dx = w.x - this.drag.lastWorld.x;
     const dy = w.y - this.drag.lastWorld.y;
     if (dx === 0 && dy === 0) return; // cursor moved within a snap cell
-    this.drag.lastWorld = w;
-    this.applyDrag(this.drag.handle, w, dx, dy);
-    this.cb.onChange();
+    // applyDrag returns false if the proposed step is rejected (e.g. circle
+    // hole would escape the outer). In that case keep lastWorld pinned so
+    // the next step is computed against the actual unmoved geometry.
+    if (this.applyDrag(this.drag.handle, w, dx, dy)) {
+      this.drag.lastWorld = w;
+      this.cb.onChange();
+    }
     this.render();
   };
 
@@ -251,6 +301,7 @@ export class Editor {
     if (this.isZeroState()) return;
     if (this.drag) {
       this.drag = null;
+      this.updateStatus({ level: "valid", message: null });
       // Shape extents may have changed mid-drag; refit now (animates).
       this.refit();
     }
@@ -285,50 +336,66 @@ export class Editor {
     }
   };
 
-  private applyDrag(h: Handle, world: Vec2, dx: number, dy: number): void {
+  // Returns true if the drag step was applied. Hole-circle drags route
+  // through the op model and can refuse a step that would invalidate the
+  // shape; everything else applies unconditionally.
+  private applyDrag(h: Handle, world: Vec2, dx: number, dy: number): boolean {
     const sel = h.selection;
     switch (h.kind) {
       case "diskCenter": {
-        if (this.shape.kind !== "disk") return;
+        if (this.shape.kind !== "disk") return false;
         this.shape.cx = world.x;
         this.shape.cy = world.y;
-        return;
+        return true;
       }
       case "diskRadius": {
-        if (this.shape.kind !== "disk") return;
+        if (this.shape.kind !== "disk") return false;
         const r = Math.hypot(world.x - this.shape.cx, world.y - this.shape.cy);
         this.shape.r = Math.max(0.1, r);
-        return;
+        return true;
       }
       case "holeCenter": {
-        if (sel.kind !== "hole") return;
+        if (sel.kind !== "hole") return false;
         const hole = this.shape.holes[sel.index];
-        if (!hole || hole.kind !== "circle") return;
-        hole.cx = world.x; hole.cy = world.y;
-        return;
+        if (!hole || hole.kind !== "circle") return false;
+        return this.tryMoveHole(sel.index, world.x, world.y, hole.r);
       }
       case "holeRadius": {
-        if (sel.kind !== "hole") return;
+        if (sel.kind !== "hole") return false;
         const hole = this.shape.holes[sel.index];
-        if (!hole || hole.kind !== "circle") return;
-        const r = Math.hypot(world.x - hole.cx, world.y - hole.cy);
-        hole.r = Math.max(0.1, r);
-        return;
+        if (!hole || hole.kind !== "circle") return false;
+        const r = Math.max(0.1, Math.hypot(world.x - hole.cx, world.y - hole.cy));
+        return this.tryMoveHole(sel.index, hole.cx, hole.cy, r);
       }
       case "vertex": {
         // index === -1 means "interior drag of whole prim" (translate all vertices).
         const ol = this.outlineFor(sel);
-        if (!ol) return;
+        if (!ol) return false;
         if (h.index === -1) {
           for (const p of ol) { p.x += dx; p.y += dy; }
         } else if (h.index !== undefined) {
           const v = ol[h.index];
           if (v) { v.x = world.x; v.y = world.y; }
         }
-        return;
+        return true;
       }
       // edgeMid is handled by insertVertexAtEdge before drag starts; not reached here.
     }
+    return false;
+  }
+
+  // Hole drag goes through previewOp(move-hole). Commit on ok; on warning
+  // or error, hold the drag at the last valid position and surface the
+  // status (so the user sees why the cursor isn't pulling the hole along).
+  private tryMoveHole(index: number, cx: number, cy: number, r: number): boolean {
+    const result = previewOp(this.shape, { kind: "move-hole", index, cx, cy, r });
+    if (result.kind === "ok") {
+      this.shape = result.shape;
+      this.updateStatus({ level: "valid", message: null });
+      return true;
+    }
+    this.updateStatus(statusFromResult(result));
+    return false;
   }
 
   private insertVertexAtEdge(h: Handle): number | null {
@@ -391,6 +458,20 @@ function sameSelection(a: Selection, b: Selection): boolean {
   if (a.kind !== b.kind) return false;
   if (a.kind === "disk" || b.kind === "disk") return a.kind === b.kind;
   return (a as { index: number }).index === (b as { index: number }).index;
+}
+
+function makeOp(kind: ToolKind, anchor: Vec2, cursor: Vec2): Op {
+  switch (kind) {
+    case "paint-rect": return { kind: "paint-rect", anchor, cursor };
+    case "erase-rect": return { kind: "erase-rect", anchor, cursor };
+    case "add-hole":   return { kind: "add-hole", center: anchor, cursor };
+  }
+}
+
+function statusFromResult(r: OpResult): ToolStatus {
+  if (r.kind === "ok")      return { level: "valid",   message: null };
+  if (r.kind === "warning") return { level: "warning", message: r.message };
+  return { level: "error", message: r.reason };
 }
 
 function pointInPolygon(p: Vec2, poly: Outline): boolean {

@@ -8,6 +8,7 @@ import { CoreClient } from "./core-boot.ts";
 import { Readouts } from "./ui/readouts.ts";
 import { StartPane } from "./ui/start-pane.ts";
 import { Toolbar } from "./ui/toolbar.ts";
+import { CanvasStatus } from "./ui/canvas-status.ts";
 import { DebugPane } from "./ui/debug-pane.ts";
 import { ZeroState } from "./ui/zero-state.ts";
 import { toWire } from "@core/shape.ts";
@@ -21,15 +22,19 @@ const editor = new Editor(canvas, defaultDisk(), {
     recompute();
   },
   onSelectionChange: () => debugPane.refresh(),
-  onToolChange: (state) => toolbar.syncToolState(state),
-  onToolCommit: (kind, p1, p2) => toolbar.applyCommit(kind, p1, p2),
+  onToolChange: (state) => {
+    toolbar.syncToolState(state);
+    canvasStatus.setTool(state);
+  },
+  onToolStatus: (status) => canvasStatus.setStatus(status),
 });
 
-const readouts  = new Readouts();
-const startPane = new StartPane({ editor, onFirstPreset: () => zeroState.exit() });
-const toolbar   = new Toolbar({ editor });
-const debugPane = new DebugPane(editor);
-const zeroState = new ZeroState({ editor, readouts });
+const readouts     = new Readouts();
+const startPane    = new StartPane({ editor, onFirstPreset: () => zeroState.exit() });
+const toolbar      = new Toolbar({ editor });
+const canvasStatus = new CanvasStatus();
+const debugPane    = new DebugPane(editor);
+const zeroState    = new ZeroState({ editor, readouts });
 
 let nextId = 1;
 let lastDisplayedId = 0;
@@ -47,7 +52,10 @@ const core = new CoreClient({
   },
   onError: (_id, err) => {
     if (zeroState.isActive()) return;
-    readouts.setInvalid(`error: ${err.split("\n")[0]}`);
+    // Solver tracebacks are long. Show "solver error" in the readout strip
+    // and dump the full message to the devtools console for debugging.
+    readouts.setInvalid("solver error");
+    console.error("[solver]", err);
   },
 });
 

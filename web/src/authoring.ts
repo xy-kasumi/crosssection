@@ -81,9 +81,9 @@ export function compose(s: AuthoringShape): ComposeResult {
 
 // ---------- prim → ring conversions ----------
 
-type PCRing = readonly (readonly [number, number])[];
+export type PCRing = readonly (readonly [number, number])[];
 
-function ringFromCircle(cx: number, cy: number, r: number): [number, number][] {
+export function ringFromCircle(cx: number, cy: number, r: number): [number, number][] {
   const out: [number, number][] = [];
   for (let i = 0; i < CIRCLE_N; i++) {
     const t = (i * 2 * Math.PI) / CIRCLE_N;
@@ -94,13 +94,13 @@ function ringFromCircle(cx: number, cy: number, r: number): [number, number][] {
   return out;
 }
 
-function outlineToRing(o: Outline): [number, number][] {
+export function outlineToRing(o: Outline): [number, number][] {
   const r: [number, number][] = o.map((p) => [p.x, p.y]);
   if (r.length > 0) r.push([r[0]![0], r[0]![1]]);
   return r;
 }
 
-function ringToOutline(r: PCRing): Outline {
+export function ringToOutline(r: PCRing): Outline {
   // Drop the closing duplicate.
   const n = r.length > 0 && r[0]![0] === r[r.length - 1]![0] && r[0]![1] === r[r.length - 1]![1]
     ? r.length - 1 : r.length;

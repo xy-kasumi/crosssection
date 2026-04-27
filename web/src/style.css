@@ -291,14 +291,6 @@ main {
   border-radius: var(--radius-control);
   opacity: 0.6;
 }
-.tool-hint {
-  font-size: var(--fs-meta);
-  opacity: 0.6;
-  min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
 
 .canvas-wrap {
   position: relative;
@@ -346,6 +338,25 @@ canvas {
   border-radius: var(--radius-control);
 }
 .size-input-overlay .hint { font-size: var(--fs-meta); opacity: 0.55; margin-left: var(--gap-tight); }
+
+/* Status strip below the canvas: gray default hint when a tool is active,
+   amber for committable warnings, red for would-discard errors. Reserves
+   one line so the canvas doesn't shift when the message appears. */
+.canvas-status {
+  width: 100%;
+  min-height: 1.4em;
+  padding: 0 var(--gap-tight);
+  font-size: var(--fs-meta);
+  opacity: 0.6;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.canvas-status.warning { color: #b06b00; opacity: 1; }
+.canvas-status.error   { color: var(--danger); opacity: 1; }
+@media (prefers-color-scheme: dark) {
+  .canvas-status.warning { color: #e0a040; }
+}
 
 /* ---------- right column: debug panel ---------- */
 
@@ -414,5 +425,6 @@ canvas {
    teaser, not noise). visibility:hidden so layout doesn't reflow when the
    user picks a preset. */
 body.zero-state .canvas-toolbar,
+body.zero-state .canvas-status,
 body.zero-state .panel       { visibility: hidden; }
 body.zero-state canvas       { cursor: default; }

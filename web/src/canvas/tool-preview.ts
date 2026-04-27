@@ -6,12 +6,24 @@ import { worldToScreen, type ToolPreview, type View } from "./index.ts";
 
 export function drawToolPreview(ctx: CanvasRenderingContext2D, view: View, p: ToolPreview): void {
   const isErase = p.kind !== "paint-rect";
-  const stroke = isErase ? "rgb(220, 70, 60)" : "rgb(40, 160, 80)";
-  const fill   = isErase ? "rgba(220, 70, 60, 0.10)" : "rgba(40, 160, 80, 0.10)";
+  // Validity drives the colour: any invalid op draws in red+solid+no-fill,
+  // regardless of tool kind, so the user reads "this won't commit" at a
+  // glance. Valid: green for additive (paint), red dashed for subtractive
+  // (erase, hole) — same as before.
+  const stroke = !p.valid       ? "rgb(220, 70, 60)"
+               : isErase        ? "rgb(220, 70, 60)"
+               :                  "rgb(40, 160, 80)";
+  const fill   = !p.valid       ? "rgba(0,0,0,0)"
+               : isErase        ? "rgba(220, 70, 60, 0.10)"
+               :                  "rgba(40, 160, 80, 0.10)";
+  // Dash pattern: solid for paint-valid and any invalid; dashed for
+  // erase-valid / hole-valid (carries "this will subtract" connotation).
+  const dashed = p.valid && isErase;
+
   const cs = worldToScreen(view, p.cursor.x, p.cursor.y);
   const as = p.anchor ? worldToScreen(view, p.anchor.x, p.anchor.y) : null;
 
-  ctx.lineWidth = 1.5;
+  ctx.lineWidth = !p.valid ? 2 : 1.5;
   ctx.strokeStyle = stroke;
   ctx.fillStyle = fill;
 
@@ -19,7 +31,7 @@ export function drawToolPreview(ctx: CanvasRenderingContext2D, view: View, p: To
     if (as) {
       const x = Math.min(as.sx, cs.sx), y = Math.min(as.sy, cs.sy);
       const w = Math.abs(as.sx - cs.sx), h = Math.abs(as.sy - cs.sy);
-      if (isErase) ctx.setLineDash([5, 4]);
+      if (dashed) ctx.setLineDash([5, 4]);
       ctx.fillRect(x, y, w, h);
       ctx.strokeRect(x, y, w, h);
       ctx.setLineDash([]);
@@ -29,7 +41,7 @@ export function drawToolPreview(ctx: CanvasRenderingContext2D, view: View, p: To
       const r = Math.hypot(cs.sx - as.sx, cs.sy - as.sy);
       ctx.beginPath();
       ctx.arc(as.sx, as.sy, r, 0, Math.PI * 2);
-      ctx.setLineDash([5, 4]);
+      if (dashed) ctx.setLineDash([5, 4]);
       ctx.fill();
       ctx.stroke();
       ctx.setLineDash([]);

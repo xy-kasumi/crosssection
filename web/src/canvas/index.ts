@@ -49,12 +49,15 @@ export type ToolKind = "paint-rect" | "erase-rect" | "add-hole";
 
 // What the canvas draws as a ghost while a tool is mid-operation. anchor=null
 // means waiting for the first click — we still draw the cursor dot (and snap
-// indicator) to give immediate feedback on placement.
+// indicator) to give immediate feedback on placement. `valid` reflects
+// whether committing the op now would succeed; when false, the ghost is
+// drawn in an "invalid" style so the user sees the bad state in real time.
 export interface ToolPreview {
   kind: ToolKind;
   anchor: Vec2 | null;
   cursor: Vec2;
   snapping: boolean;
+  valid: boolean;
 }
 
 const CANVAS_INSET_PX = 24;     // visual inset around grid for labels/breathing room
