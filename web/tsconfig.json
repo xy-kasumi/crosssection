@@ -14,7 +14,8 @@
     "forceConsistentCasingInFileNames": true,
     "lib": ["ES2022", "DOM", "DOM.Iterable", "WebWorker"],
     "paths": {
-      "@solver/*": ["../solver/*"]
+      "@solver/*": ["../solver/*"],
+      "@geom/*": ["../geom/*"]
     },
     "types": ["vite/client"]
   },
@@ -24,12 +25,14 @@
     "../solver/worker.ts",
     "../solver/types.ts",
     "../solver/shape.ts",
-    "../solver/pyodide-host.ts"
+    "../solver/pyodide-host.ts",
+    "../geom/**/*.ts"
   ],
   "exclude": [
     "../solver/node-host.ts",
     "../solver/compute.ts",
     "../solver/presets.ts",
-    "../solver/tests/**"
+    "../solver/tests/**",
+    "../geom/tests/**"
   ]
 }

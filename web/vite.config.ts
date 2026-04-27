@@ -13,6 +13,8 @@ export default defineConfig({
       // `import { SolverClient } from "@solver/client.ts"`. Worker, Python,
       // and wheel files are solver-internal and resolved inside solver/.
       "@solver": resolve(here, "../solver"),
+      // Geometry kernel — pure, immutable AuthoringShape + Op + apply().
+      "@geom": resolve(here, "../geom"),
     },
   },
   optimizeDeps: {

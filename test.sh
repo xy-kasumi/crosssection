@@ -15,10 +15,9 @@ cd "$(dirname "$0")"
 echo "=== solver/tests ==="
 node --import tsx solver/tests/run-battery.ts
 
-# geom/ doesn't exist yet (added in phase B). Once it does, uncomment:
-# echo
-# echo "=== geom/tests ==="
-# node --import tsx --test 'geom/tests/**/*.test.ts'
+echo
+echo "=== geom/tests ==="
+node --import tsx --test 'geom/tests/**/*.test.ts'
 
 echo
 echo "all batteries green"
