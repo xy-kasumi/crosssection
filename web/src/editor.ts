@@ -185,12 +185,22 @@ export class Editor {
         const c = compose(displayShape);
         displayComposed = c.ok ? c.shape : null;
       }
-      // Hole-circle drags get a ghost circle showing the live target.
-      const ghost = this.circleDragGhost();
-      if (ghost) preview = { ...ghost, valid: r.kind !== "error" };
     }
     this.updateStatus(status);
-    this.handles = draw(this.canvas, this.view, displayShape, displayComposed, this.selection, preview);
+    this.handles = draw(
+      this.canvas, this.view, displayShape, displayComposed, this.selection,
+      preview, this.dragCursor(),
+    );
+  }
+
+  // Where to draw the small "drag cursor" dot. Active during a radius drag
+  // so the user sees their pointer-direction on the circle's edge — center
+  // drags don't need it (the center handle is already at the cursor).
+  private dragCursor(): Vec2 | null {
+    if (!this.drag || !this.cursorWorld) return null;
+    const k = this.drag.handle.kind;
+    if (k !== "diskRadius" && k !== "holeRadius") return null;
+    return this.snapWorld(this.cursorWorld);
   }
 
   private updateStatus(s: ToolStatus): void {
@@ -408,40 +418,6 @@ export class Editor {
       case "edgeMid":
         return null; // handled in onMouseDown
     }
-  }
-
-  private circleDragGhost(): { kind: "add-hole"; anchor: Vec2; cursor: Vec2; snapping: boolean } | null {
-    if (!this.drag) return null;
-    const h = this.drag.handle;
-    const isRadiusDrag = h.kind === "diskRadius" || h.kind === "holeRadius";
-    const isCenterDrag = h.kind === "diskCenter" || h.kind === "holeCenter";
-    if (!isRadiusDrag && !isCenterDrag) return null;
-
-    const r = this.drag.previewResult;
-    if (!r || (r.kind !== "ok" && r.kind !== "warning")) return null;
-    const candidate = r.shape;
-
-    // Read the live center+radius from the candidate. For polygonized
-    // results (warning) the circle is gone — no ghost.
-    let cx: number, cy: number, rad: number;
-    if (h.kind === "diskCenter" || h.kind === "diskRadius") {
-      if (candidate.kind !== "disk") return null;
-      cx = candidate.cx; cy = candidate.cy; rad = candidate.r;
-    } else {
-      if (h.selection.kind !== "hole") return null;
-      const hole = candidate.holes[h.selection.index];
-      if (!hole || hole.kind !== "circle") return null;
-      cx = hole.cx; cy = hole.cy; rad = hole.r;
-    }
-
-    // For a radius drag, the circumference dot tracks the user's cursor so
-    // any direction grows/shrinks the circle visibly (consistent with Add
-    // Hole). For a center drag, the cursor IS the center — pick an arbitrary
-    // angle so the ghost still has a circumference marker.
-    const cursor = isRadiusDrag && this.cursorWorld
-      ? this.snapWorld(this.cursorWorld)
-      : { x: cx + rad, y: cy };
-    return { kind: "add-hole", anchor: { x: cx, y: cy }, cursor, snapping: this.snap };
   }
 
   private pickPrimAt(w: Vec2): Selection | null {

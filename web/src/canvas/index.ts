@@ -106,6 +106,7 @@ export function draw(
   composed: SolverShape | null,
   selection: Selection | null,
   toolPreview: ToolPreview | null = null,
+  dragCursor: Vec2 | null = null,
 ): Handle[] {
   const ctx = canvas.getContext("2d");
   if (!ctx) return [];
@@ -149,6 +150,14 @@ export function draw(
   }
 
   if (toolPreview) drawToolPreview(ctx, view, toolPreview);
+
+  if (dragCursor) {
+    const s = worldToScreen(view, dragCursor.x, dragCursor.y);
+    ctx.beginPath();
+    ctx.arc(s.sx, s.sy, 3, 0, Math.PI * 2);
+    ctx.fillStyle = "rgb(80, 130, 230)";
+    ctx.fill();
+  }
 
   return handles;
 }
