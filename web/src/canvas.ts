@@ -33,6 +33,18 @@ export interface Handle {
   y: number;
 }
 
+export type ToolKind = "paint-rect" | "erase-rect" | "add-hole";
+
+// What the canvas draws as a ghost while a tool is mid-operation.
+// Anchor=null means waiting for the first click — we still draw the cursor
+// dot (and snap indicator) to give immediate feedback on placement.
+export interface ToolPreview {
+  kind: ToolKind;
+  anchor: Vec2 | null;
+  cursor: Vec2;
+  snapping: boolean;
+}
+
 const HANDLE_RADIUS_PX = 5;
 const EDGE_HANDLE_RADIUS_PX = 4;
 const FIT_MARGIN = 1.15;        // halfSpan must be >= FIT_MARGIN * max abs world coord
@@ -95,6 +107,7 @@ export function draw(
   shape: AuthoringShape,
   composed: CoreShape | null,
   selection: Selection | null,
+  toolPreview: ToolPreview | null = null,
 ): Handle[] {
   const ctx = canvas.getContext("2d");
   if (!ctx) return [];
@@ -104,7 +117,9 @@ export function draw(
 
   drawGrid(ctx, view);
 
-  // Filled silhouette (the FEM-facing composed shape — what the solver sees)
+  // Filled silhouette (the FEM-facing composed shape). Faded while a tool
+  // is active so the new prim can sit visually on top without dissolving
+  // into the existing shape.
   if (composed) {
     const path = new Path2D();
     for (const ring of composed) {
@@ -115,39 +130,98 @@ export function draw(
       }
       path.closePath();
     }
-    ctx.fillStyle = "rgba(80, 130, 230, 0.22)";
+    const alpha = toolPreview ? 0.10 : 0.22;
+    const strokeAlpha = toolPreview ? 0.45 : 1;
+    ctx.fillStyle = `rgba(80, 130, 230, ${alpha})`;
     ctx.fill(path, "evenodd");
-    ctx.strokeStyle = "rgb(80, 130, 230)";
+    ctx.strokeStyle = `rgba(80, 130, 230, ${strokeAlpha})`;
     ctx.lineWidth = 1.5;
     ctx.stroke(path);
   }
 
-  // Selection-aware handles
+  // Selection-aware handles. Hidden while a tool is active — the ghost
+  // owns the visual focus, and stray handles would invite stray clicks.
   const handles: Handle[] = [];
-  if (shape.kind === "disk") {
-    if (selection?.kind === "disk") {
-      pushDiskHandles(handles, shape.cx, shape.cy, shape.r);
-    }
-  } else {
-    for (let i = 0; i < shape.outers.length; i++) {
-      if (selection?.kind === "outer" && selection.index === i) {
-        pushOutlineHandles(handles, shape.outers[i]!, { kind: "outer", index: i });
+  if (!toolPreview) {
+    if (shape.kind === "disk") {
+      if (selection?.kind === "disk") {
+        pushDiskHandles(handles, shape.cx, shape.cy, shape.r);
+      }
+    } else {
+      for (let i = 0; i < shape.outers.length; i++) {
+        if (selection?.kind === "outer" && selection.index === i) {
+          pushOutlineHandles(handles, shape.outers[i]!, { kind: "outer", index: i });
+        }
       }
     }
+    for (let i = 0; i < shape.holes.length; i++) {
+      if (selection?.kind === "hole" && selection.index === i) {
+        const h = shape.holes[i]!;
+        if (h.kind === "circle") {
+          pushHoleCircleHandles(handles, h.cx, h.cy, h.r, i);
+        } else {
+          pushOutlineHandles(handles, h.outline, { kind: "hole", index: i });
+        }
+      }
+    }
+    drawHandles(ctx, view, handles);
   }
-  for (let i = 0; i < shape.holes.length; i++) {
-    if (selection?.kind === "hole" && selection.index === i) {
-      const h = shape.holes[i]!;
-      if (h.kind === "circle") {
-        pushHoleCircleHandles(handles, h.cx, h.cy, h.r, i);
-      } else {
-        pushOutlineHandles(handles, h.outline, { kind: "hole", index: i });
-      }
+
+  if (toolPreview) drawToolPreview(ctx, view, toolPreview);
+
+  return handles;
+}
+
+function drawToolPreview(ctx: CanvasRenderingContext2D, view: View, p: ToolPreview): void {
+  const isErase = p.kind !== "paint-rect";
+  const stroke = isErase ? "rgb(220, 70, 60)" : "rgb(40, 160, 80)";
+  const fill   = isErase ? "rgba(220, 70, 60, 0.10)" : "rgba(40, 160, 80, 0.10)";
+  const cs = worldToScreen(view, p.cursor.x, p.cursor.y);
+  const as = p.anchor ? worldToScreen(view, p.anchor.x, p.anchor.y) : null;
+
+  ctx.lineWidth = 1.5;
+  ctx.strokeStyle = stroke;
+  ctx.fillStyle = fill;
+
+  if (p.kind === "paint-rect" || p.kind === "erase-rect") {
+    if (as) {
+      const x = Math.min(as.sx, cs.sx), y = Math.min(as.sy, cs.sy);
+      const w = Math.abs(as.sx - cs.sx), h = Math.abs(as.sy - cs.sy);
+      if (isErase) ctx.setLineDash([5, 4]);
+      ctx.fillRect(x, y, w, h);
+      ctx.strokeRect(x, y, w, h);
+      ctx.setLineDash([]);
+    }
+  } else { // add-hole: anchor is center, cursor sets radius
+    if (as) {
+      const r = Math.hypot(cs.sx - as.sx, cs.sy - as.sy);
+      ctx.beginPath();
+      ctx.arc(as.sx, as.sy, r, 0, Math.PI * 2);
+      ctx.setLineDash([5, 4]);
+      ctx.fill();
+      ctx.stroke();
+      ctx.setLineDash([]);
+      drawDot(ctx, as.sx, as.sy, stroke);
     }
   }
 
-  drawHandles(ctx, view, handles);
-  return handles;
+  drawDot(ctx, cs.sx, cs.sy, stroke);
+
+  if (p.snapping) {
+    ctx.strokeStyle = "rgba(80,80,80,0.6)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(cs.sx - 6, cs.sy); ctx.lineTo(cs.sx + 6, cs.sy);
+    ctx.moveTo(cs.sx, cs.sy - 6); ctx.lineTo(cs.sx, cs.sy + 6);
+    ctx.stroke();
+  }
+}
+
+function drawDot(ctx: CanvasRenderingContext2D, sx: number, sy: number, color: string): void {
+  ctx.beginPath();
+  ctx.arc(sx, sy, 3, 0, Math.PI * 2);
+  ctx.fillStyle = color;
+  ctx.fill();
 }
 
 function drawGrid(ctx: CanvasRenderingContext2D, view: View): void {

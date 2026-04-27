@@ -10,13 +10,25 @@ import {
   screenToWorld,
   targetHalfSpan,
   type Handle,
+  type ToolKind,
+  type ToolPreview,
   type View,
 } from "./canvas.ts";
 import type { Shape as CoreShape } from "@core/shape.ts";
 
+// Tool state shipped to the host so the toolbar can light up the active
+// button and show the right hint ("click first corner" vs "click opposite
+// corner"). Phase = whether we've captured the first click yet.
+export interface ToolState {
+  kind: ToolKind;
+  phase: "wait-anchor" | "wait-end";
+}
+
 export interface EditorCallbacks {
   onChange(): void;
   onSelectionChange(sel: Selection | null): void;
+  onToolChange?(state: ToolState | null): void;
+  onToolCommit?(kind: ToolKind, p1: Vec2, p2: Vec2): void;
 }
 
 export class Editor {
@@ -40,6 +52,12 @@ export class Editor {
     handle: Handle;
     lastWorld: Vec2;
   } = null;
+
+  // Tool state. Mutually exclusive with drag — when a tool is active, the
+  // canvas swallows clicks for tool placement (and ignores handles).
+  private tool: { kind: ToolKind; anchor: Vec2 | null } | null = null;
+  private cursorWorld: Vec2 | null = null;
+  private snap = true;
 
   constructor(canvas: HTMLCanvasElement, initial: AuthoringShape, cb: EditorCallbacks) {
     this.canvas = canvas;
@@ -80,6 +98,35 @@ export class Editor {
     this.render();
   }
 
+  setTool(kind: ToolKind | null): void {
+    if (kind === null) {
+      if (!this.tool) return;
+      this.tool = null;
+    } else {
+      this.tool = { kind, anchor: null };
+      this.selection = null;
+      this.cb.onSelectionChange(null);
+    }
+    this.cb.onToolChange?.(this.toolStateForCb());
+    this.render();
+  }
+
+  setSnap(enabled: boolean): void {
+    this.snap = enabled;
+    if (this.tool) this.render();
+  }
+
+  private toolStateForCb(): ToolState | null {
+    if (!this.tool) return null;
+    return { kind: this.tool.kind, phase: this.tool.anchor ? "wait-end" : "wait-anchor" };
+  }
+
+  private snapWorld(p: Vec2): Vec2 {
+    if (!this.snap) return p;
+    const u = this.view.unit;
+    return { x: Math.round(p.x / u) * u, y: Math.round(p.y / u) * u };
+  }
+
   // Refit the viewport to the current shape. During a drag we don't change
   // halfSpan (would yank the grid under the user's cursor); we still rebuild
   // the view at the current halfSpan in case the canvas itself was resized.
@@ -117,7 +164,12 @@ export class Editor {
   };
 
   render(): void {
-    this.handles = draw(this.canvas, this.view, this.shape, this.composed, this.selection);
+    let preview: ToolPreview | null = null;
+    if (this.tool && this.cursorWorld) {
+      const cursor = this.snapWorld(this.cursorWorld);
+      preview = { kind: this.tool.kind, anchor: this.tool.anchor, cursor, snapping: this.snap };
+    }
+    this.handles = draw(this.canvas, this.view, this.shape, this.composed, this.selection, preview);
   }
 
   // ----- mutation helpers (used by main.ts buttons too) -----
@@ -135,6 +187,7 @@ export class Editor {
     this.canvas.addEventListener("mousemove", this.onMouseMove);
     window.addEventListener("mouseup", this.onMouseUp);
     this.canvas.addEventListener("contextmenu", this.onContextMenu);
+    window.addEventListener("keydown", this.onKeyDown);
     window.addEventListener("resize", () => this.refit());
   }
 
@@ -146,6 +199,23 @@ export class Editor {
   private onMouseDown = (ev: MouseEvent): void => {
     if (ev.button !== 0) return;
     const { sx, sy } = this.screenFromEvent(ev);
+    // 0. Tool mode swallows clicks for 2-step prim placement.
+    if (this.tool) {
+      const w = this.snapWorld(screenToWorld(this.view, sx, sy));
+      if (!this.tool.anchor) {
+        this.tool.anchor = w;
+        this.cb.onToolChange?.(this.toolStateForCb());
+        this.render();
+      } else {
+        const kind = this.tool.kind;
+        const anchor = this.tool.anchor;
+        this.tool = null;
+        this.cb.onToolChange?.(null);
+        this.cb.onToolCommit?.(kind, anchor, w);
+        this.render();
+      }
+      return;
+    }
     // 1. If we hit a handle, start a handle drag.
     const hit = hitHandle(this.view, this.handles, sx, sy);
     if (hit) {
@@ -187,9 +257,14 @@ export class Editor {
   };
 
   private onMouseMove = (ev: MouseEvent): void => {
-    if (!this.drag) return;
     const { sx, sy } = this.screenFromEvent(ev);
-    const w = screenToWorld(this.view, sx, sy);
+    this.cursorWorld = screenToWorld(this.view, sx, sy);
+    if (this.tool) {
+      this.render();
+      return;
+    }
+    if (!this.drag) return;
+    const w = this.cursorWorld;
     const dx = w.x - this.drag.lastWorld.x;
     const dy = w.y - this.drag.lastWorld.y;
     this.drag.lastWorld = w;
@@ -208,13 +283,28 @@ export class Editor {
   };
 
   private onContextMenu = (ev: MouseEvent): void => {
-    // Right-click on a vertex deletes it.
     ev.preventDefault();
+    // Right-click cancels an in-flight tool first; otherwise it deletes a
+    // vertex under the cursor.
+    if (this.tool) {
+      this.tool = null;
+      this.cb.onToolChange?.(null);
+      this.render();
+      return;
+    }
     const { sx, sy } = this.screenFromEvent(ev);
     const hit = hitHandle(this.view, this.handles, sx, sy);
     if (hit && hit.kind === "vertex") {
       this.deleteVertex(hit);
       this.cb.onChange();
+      this.render();
+    }
+  };
+
+  private onKeyDown = (ev: KeyboardEvent): void => {
+    if (ev.key === "Escape" && this.tool) {
+      this.tool = null;
+      this.cb.onToolChange?.(null);
       this.render();
     }
   };

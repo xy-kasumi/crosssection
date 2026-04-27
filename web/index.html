@@ -24,23 +24,25 @@
         </div>
       </aside>
 
-      <div class="canvas-wrap">
-        <canvas id="cv" width="480" height="480"></canvas>
-        <form class="size-input-overlay" id="size-input" hidden></form>
+      <div class="canvas-col">
+        <div class="canvas-toolbar">
+          <button class="tool-btn" data-tool="paint-rect" type="button">Paint Rect</button>
+          <button class="tool-btn" data-tool="erase-rect" type="button">Erase Rect</button>
+          <button class="tool-btn" data-tool="add-hole"   type="button">Add Hole</button>
+          <span class="toolbar-sep"></span>
+          <label class="snap-toggle">
+            <input type="checkbox" id="snap-toggle" checked />
+            <span>Snap</span>
+          </label>
+          <span class="tool-hint" id="tool-hint"></span>
+        </div>
+        <div class="canvas-wrap">
+          <canvas id="cv" width="480" height="480"></canvas>
+          <form class="size-input-overlay" id="size-input" hidden></form>
+        </div>
       </div>
 
       <aside class="panel">
-        <section class="ops">
-          <div class="ops-row">
-            <button id="op-add-rect" class="op-btn">+ Rect</button>
-            <button id="op-add-poly" class="op-btn">+ Polygon</button>
-          </div>
-          <div class="ops-row">
-            <button id="op-add-circle-hole" class="op-btn">− Circle hole</button>
-            <button id="op-add-poly-hole" class="op-btn">− Polygon hole</button>
-          </div>
-        </section>
-
         <section class="prim-list">
           <h3>Primitives</h3>
           <ul id="prim-list"></ul>
@@ -66,7 +68,7 @@
 
         <section class="status">
           <div id="status">starting Python…</div>
-          <div class="hint">Drag handles to edit. Right-click a vertex to delete. Click an empty edge handle to insert a vertex.</div>
+          <div class="hint">Pick a tool above to add a rect, erase a rect, or place a hole. Drag handles to edit. Right-click a vertex to delete. Click an empty edge handle to insert a vertex. Esc cancels a tool.</div>
         </section>
       </aside>
     </main>

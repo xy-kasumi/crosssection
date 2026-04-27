@@ -10,31 +10,31 @@ import {
   rectShapeOf,
   rodOf,
   type AuthoringShape,
-  type CircleHole,
-  type PolygonHole,
+  type Outline,
   type Selection,
+  type Vec2,
 } from "./authoring.ts";
-import { Editor } from "./editor.ts";
+import { Editor, type ToolState } from "./editor.ts";
+import type { ToolKind } from "./canvas.ts";
 import { twoSigFigs } from "./format.ts";
 import type { ToWorker, FromWorker } from "./types.ts";
 import { toWire } from "@core/shape.ts";
 
 const els = {
-  main:          document.querySelector("main") as HTMLElement,
-  canvas:        document.getElementById("cv") as HTMLCanvasElement,
+  main:             document.querySelector("main") as HTMLElement,
+  canvas:           document.getElementById("cv") as HTMLCanvasElement,
   startPane:        document.getElementById("start-pane")        as HTMLElement,
   startPaneToggle:  document.getElementById("start-pane-toggle") as HTMLButtonElement,
   startBtns:        Array.from(document.querySelectorAll<HTMLButtonElement>(".start-btn")),
   sizeInput:        document.getElementById("size-input")        as HTMLFormElement,
-  addRect:       document.getElementById("op-add-rect")        as HTMLButtonElement,
-  addPoly:       document.getElementById("op-add-poly")        as HTMLButtonElement,
-  addCircleHole: document.getElementById("op-add-circle-hole") as HTMLButtonElement,
-  addPolyHole:   document.getElementById("op-add-poly-hole")   as HTMLButtonElement,
-  primList:      document.getElementById("prim-list")          as HTMLUListElement,
-  ix:            document.getElementById("ix")!,
-  iy:            document.getElementById("iy")!,
-  j:             document.getElementById("j")!,
-  status:        document.getElementById("status")!,
+  toolBtns:         Array.from(document.querySelectorAll<HTMLButtonElement>(".tool-btn")),
+  snapToggle:       document.getElementById("snap-toggle")       as HTMLInputElement,
+  toolHint:         document.getElementById("tool-hint")!,
+  primList:         document.getElementById("prim-list")          as HTMLUListElement,
+  ix:               document.getElementById("ix")!,
+  iy:               document.getElementById("iy")!,
+  j:                document.getElementById("j")!,
+  status:           document.getElementById("status")!,
 };
 
 // Tracks whether the user has touched the shape since the last preset load.
@@ -51,6 +51,15 @@ const editor = new Editor(els.canvas, defaultDisk(), {
   },
   onSelectionChange: () => {
     refreshPrimList();
+  },
+  onToolChange: (state) => {
+    for (const b of els.toolBtns) {
+      b.classList.toggle("active", state !== null && b.dataset.tool === state.kind);
+    }
+    els.toolHint.textContent = state ? toolHintText(state) : "";
+  },
+  onToolCommit: (kind, p1, p2) => {
+    applyToolCommit(kind, p1, p2);
   },
 });
 
@@ -291,41 +300,66 @@ function dismissSizeInput(): void {
   els.sizeInput.innerHTML = "";
 }
 
-// ----- buttons -----
+// ----- toolbar -----
 
-els.addRect.addEventListener("click", () => {
-  ensurePolygonMode();
-  editor.mutate((s) => {
-    if (s.kind !== "polygon") return;
-    s.outers.push(rectOutline(0, 0, 6, 6));
-    editor.setSelection({ kind: "outer", index: s.outers.length - 1 });
+for (const b of els.toolBtns) {
+  b.addEventListener("click", () => {
+    const kind = b.dataset.tool as ToolKind;
+    // Click an active tool button to deactivate it.
+    if (b.classList.contains("active")) editor.setTool(null);
+    else editor.setTool(kind);
   });
-});
+}
 
-els.addPoly.addEventListener("click", () => {
-  ensurePolygonMode();
-  editor.mutate((s) => {
-    if (s.kind !== "polygon") return;
-    s.outers.push(rectOutline(0, 0, 6, 6));
-    editor.setSelection({ kind: "outer", index: s.outers.length - 1 });
-  });
-});
+els.snapToggle.addEventListener("change", () => editor.setSnap(els.snapToggle.checked));
 
-els.addCircleHole.addEventListener("click", () => {
-  editor.mutate((s) => {
-    const hole: CircleHole = { kind: "circle", cx: 0, cy: 0, r: 1.5 };
-    s.holes.push(hole);
-    editor.setSelection({ kind: "hole", index: s.holes.length - 1 });
-  });
-});
+function toolHintText(state: ToolState): string {
+  if (state.phase === "wait-anchor") {
+    if (state.kind === "add-hole") return "Click center";
+    return "Click first corner";
+  }
+  if (state.kind === "add-hole") return "Click circumference";
+  return "Click opposite corner";
+}
 
-els.addPolyHole.addEventListener("click", () => {
-  editor.mutate((s) => {
-    const hole: PolygonHole = { kind: "polygon", outline: rectOutline(0, 0, 3, 3) };
-    s.holes.push(hole);
-    editor.setSelection({ kind: "hole", index: s.holes.length - 1 });
-  });
-});
+function applyToolCommit(kind: ToolKind, p1: Vec2, p2: Vec2): void {
+  if (kind === "paint-rect") {
+    const out = rectFromCorners(p1, p2);
+    if (out === null) return;
+    ensurePolygonMode();
+    editor.mutate((s) => {
+      if (s.kind !== "polygon") return;
+      s.outers.push(out);
+      editor.setSelection({ kind: "outer", index: s.outers.length - 1 });
+    });
+  } else if (kind === "erase-rect") {
+    const out = rectFromCorners(p1, p2);
+    if (out === null) return;
+    editor.mutate((s) => {
+      s.holes.push({ kind: "polygon", outline: out });
+      editor.setSelection({ kind: "hole", index: s.holes.length - 1 });
+    });
+  } else { // add-hole
+    const r = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+    if (r < 0.05) return;
+    editor.mutate((s) => {
+      s.holes.push({ kind: "circle", cx: p1.x, cy: p1.y, r });
+      editor.setSelection({ kind: "hole", index: s.holes.length - 1 });
+    });
+  }
+}
+
+function rectFromCorners(p1: Vec2, p2: Vec2): Outline | null {
+  const x0 = Math.min(p1.x, p2.x), x1 = Math.max(p1.x, p2.x);
+  const y0 = Math.min(p1.y, p2.y), y1 = Math.max(p1.y, p2.y);
+  if (x1 - x0 < 0.05 || y1 - y0 < 0.05) return null; // ignore zero-area drag
+  return [
+    { x: x0, y: y0 },
+    { x: x1, y: y0 },
+    { x: x1, y: y1 },
+    { x: x0, y: y1 },
+  ];
+}
 
 function ensurePolygonMode(): void {
   // Switching kind discards holes (current ones may not be valid in the new outer).
