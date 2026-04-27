@@ -30,34 +30,44 @@ export type Selection =
   | { kind: "disk" }                       // the disk itself in DiskShape
   | { kind: "hole"; index: number };       // shape.holes[index]
 
-// Composition errors are tagged so the UI can localize and (for the two
-// indexed variants) highlight the offending hole. No human-language
-// strings live in geom/.
-export type ComposeErrorTag =
-  | { tag: "disk-radius-nonpositive" }
-  | { tag: "no-outer" }
-  | { tag: "outer-empty" }
-  | { tag: "outer-disconnected" }
-  | { tag: "hole-too-few-points";  holeIndex: number }
-  | { tag: "hole-crosses-outer";   holeIndex: number };
+// Why a single ErrorTag/WarnTag for both compose() and apply(): from the
+// caller's view there's no "compose" layer — only "did this op produce a
+// valid geometry?" The same failure/warning modes fall out of both layers;
+// rendering and highlighting work the same way regardless of which layer
+// caught it.
+//
+// `holeIndex` is optional and present only when geom can pin the issue to a
+// specific hole. UI may use it to highlight; the user-facing text doesn't
+// need to expose the index.
+export type ErrorTag =
+  | { tag: "empties-shape" }
+  | { tag: "disconnects-shape" }
+  | { tag: "breaks-polygon";  holeIndex?: number };
 
-export type ComposeOk    = { ok: true;  shape: SolverShape };
-export type ComposeError = { ok: false } & ComposeErrorTag;
+// A hole that lies outside (or crosses) the outer is silently dropped from
+// the result; it's lossy but recoverable, so it's a warning rather than an
+// error. circle-lost fires when a circle prim becomes a polygon.
+export type WarnTag =
+  | { tag: "circle-lost" }
+  | { tag: "hole-outside-shape"; holeIndex?: number };
+
+export type ComposeOk    = { ok: true;  shape: SolverShape; warning?: WarnTag };
+export type ComposeError = { ok: false } & ErrorTag;
 export type ComposeResult = ComposeOk | ComposeError;
 
 export function compose(s: AuthoringShape): ComposeResult {
   // Build the outer ring(s).
   let outerMP: MultiPolygon;
   if (s.kind === "disk") {
-    if (!(s.r > 0)) return { ok: false, tag: "disk-radius-nonpositive" };
+    if (!(s.r > 0)) return { ok: false, tag: "empties-shape" };
     outerMP = outerMultiPolygonOf(s);
   } else {
     const outerRings = s.outers.map(outlineToRing).filter((r) => r.length >= 4);
-    if (outerRings.length === 0) return { ok: false, tag: "no-outer" };
+    if (outerRings.length === 0) return { ok: false, tag: "empties-shape" };
     outerMP = polygonClipping.union(...outerRings.map((r): MultiPolygon => [[r]]));
   }
-  if (outerMP.length === 0) return { ok: false, tag: "outer-empty" };
-  if (outerMP.length > 1)   return { ok: false, tag: "outer-disconnected" };
+  if (outerMP.length === 0) return { ok: false, tag: "empties-shape" };
+  if (outerMP.length > 1)   return { ok: false, tag: "disconnects-shape" };
 
   // The single piece may already have computed holes (from polygon-clipping merging
   // outers that overlap). It shouldn't, in our model, but defend against it.
@@ -65,21 +75,20 @@ export function compose(s: AuthoringShape): ComposeResult {
   const outer = piece[0]!;
   const computedHoles = piece.slice(1);
 
-  // Add user-declared holes by polygon-clipping.difference. This validates that
-  // each hole stays inside the outer (anything outside contributes nothing).
-  // We DO want to error on holes that cross the boundary or are entirely
-  // outside — those are user mistakes, not silent no-ops.
+  // Add user-declared holes. Holes with too few points are an error (we
+  // can't represent them). Holes that lie outside or cross the outer get
+  // silently dropped + warning — recoverable lossy.
   const userHoles: Outline[] = [];
+  let warning: WarnTag | null = null;
   for (let i = 0; i < s.holes.length; i++) {
     const h = s.holes[i]!;
     const ring = h.kind === "circle" ? ringFromCircle(h.cx, h.cy, h.r) : outlineToRing(h.outline);
-    if (ring.length < 4) return { ok: false, tag: "hole-too-few-points", holeIndex: i };
+    if (ring.length < 4) return { ok: false, tag: "breaks-polygon", holeIndex: i };
     const holeMP: MultiPolygon = [[ring]];
-    // The hole must be entirely inside the outer (no edge crossings, no parts outside).
-    // Test: hole \ outer should be empty.
     const outside = polygonClipping.difference(holeMP, [piece]);
     if (outside.length > 0) {
-      return { ok: false, tag: "hole-crosses-outer", holeIndex: i };
+      if (warning === null) warning = { tag: "hole-outside-shape", holeIndex: i };
+      continue;
     }
     userHoles.push(ringToOutline(ring));
   }
@@ -89,7 +98,7 @@ export function compose(s: AuthoringShape): ComposeResult {
     ...computedHoles.map(ringToSolverPolygon),
     ...userHoles.map(outlineToSolverPolygon),
   ];
-  return { ok: true, shape };
+  return warning !== null ? { ok: true, shape, warning } : { ok: true, shape };
 }
 
 type PCRing = readonly (readonly [number, number])[];

@@ -21,15 +21,19 @@ import {
   and `apply()`; both compose internally so `{data, composed}` cannot
   drift.
 - `apply(shape, op)` returns one of:
-  - `{kind: "ok",      shape, preselect?}`    — clean commit
-  - `{kind: "warning", shape, preselect?, tag}` — committable but lossy (`tag: WarnTag`)
-  - `{kind: "error",   tag, ...}`             — user intent rejected (`tag: ApplyErrorTag`)
-  - `{kind: "invalid", reason}`               — bug; UI must surface and crash
+  - `{kind: "ok",      shape, preselect?}`         — clean commit
+  - `{kind: "warning", shape, preselect?, ...w}`   — committable but lossy (`w: WarnTag`)
+  - `{kind: "error",   ...e}`                      — geometry rejected (`e: ErrorTag`)
+  - `{kind: "invalid", reason}`                    — bug; consumer must surface and crash
 
-Tag vocabulary (warning, apply-error, compose-error) is exhaustively
-listed in `apply.ts` / `shape.ts`. No human-language strings live in
-`geom/`; the web layer renders tags to text. Dev-facing `OpInvalid.reason`
-is exempt — it surfaces only via thrown exception → `window.onerror`.
+`ErrorTag` and `WarnTag` are shared with `compose()` — from the caller's
+view there's no "compose" layer, just "did this op produce a valid
+geometry?" Indexed variants carry an optional `holeIndex` for UI
+highlighting; the text rendering doesn't need it.
+
+No human-language strings live in `geom/`. The dev-facing `OpInvalid.reason`
+is the one exception, and only because it never reaches end-user surfaces
+(consumers are expected to throw on `invalid`).
 
 ## Invariants
 

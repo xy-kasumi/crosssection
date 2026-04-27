@@ -32,14 +32,17 @@ test("rod → add-hole crossing the outer → warning, polygon with notched oute
   assert.equal(r.shape.holes.length, 0); // bite went through the boundary
 });
 
-test("rod → add-hole entirely outside → error", () => {
+test("rod → add-hole entirely outside → warning, hole silently dropped", () => {
   const rod = rodOf(5);
   const op: Op = { kind: "add-hole", center: { x: 100, y: 100 }, cursor: { x: 101, y: 100 } };
   const r = apply(rod, op);
-  assert.equal(r.kind, "error");
+  assert.equal(r.kind, "warning");
+  if (r.kind !== "warning") return;
+  assert.equal(r.tag, "hole-outside-shape");
+  assert.equal(r.shape, rod);
 });
 
-test("rod-with-clean-hole → move-hole-center far outside → error, no shape returned", () => {
+test("rod-with-clean-hole → move-hole-center far outside → warning, base unchanged", () => {
   const rod = rodOf(5);
   const seeded = apply(rod, {
     kind: "add-hole", center: { x: 0, y: 0 }, cursor: { x: 1, y: 0 },
@@ -47,7 +50,9 @@ test("rod-with-clean-hole → move-hole-center far outside → error, no shape r
   if (seeded.kind !== "ok") throw new Error("setup failed");
   const op: Op = { kind: "move-hole-center", index: 0, target: { x: 100, y: 100 } };
   const r = apply(seeded.shape, op);
-  assert.equal(r.kind, "error");
+  assert.equal(r.kind, "warning");
+  if (r.kind !== "warning") return;
+  assert.equal(r.tag, "hole-outside-shape");
 });
 
 test("rod-with-clean-hole → move-hole-center across boundary → warning + polygon", () => {

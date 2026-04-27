@@ -1,11 +1,11 @@
-// apply(base, op) → ApplyResult — every shape mutation in the editor goes
-// through this function. The four-case trichotomy:
+// apply(base, op) → ApplyResult. The four-case trichotomy:
 //
 //   ok      — clean commit; new shape returned.
-//   warning — committable but lossy (a circle prim becomes a polygon).
-//   error   — user intent rejected (zero-area, would-disconnect, ...).
-//   invalid — bug; UI shouldn't reach here. Editor logs + throws; the
-//             top-level window.onerror handler shows the boot-overlay.
+//   warning — committable but lossy (a circle prim becomes a polygon, or
+//             a hole was silently dropped).
+//   error   — geometry rejected (would empty / disconnect / break the shape).
+//   invalid — Op is malformed; the contract was violated. Consumers should
+//             treat this as a bug and crash.
 //
 // Invariants:
 //   - apply is pure: it builds a *new* candidate shape, never edits the
@@ -27,28 +27,14 @@ import { compose } from "./shape.ts";
 import type {
   AuthoringShape,
   CircleHole,
-  ComposeErrorTag,
+  ErrorTag,
   Hole,
   Outline,
   Selection,
   Vec2,
+  WarnTag,
 } from "./shape.ts";
 import type { Op } from "./op.ts";
-
-// Tag vocabulary surfaced to the UI. No human-language strings live in geom/;
-// the web layer renders these to text (and may use indexed variants to
-// highlight an offending hole).
-export type WarnTag = "circle-lost";
-
-export type ApplyErrorTag =
-  | { tag: "paint-disconnected" }
-  | { tag: "erase-empties-shape" }
-  | { tag: "erase-cuts-shape" }
-  | { tag: "hole-outside-shape" }
-  | { tag: "hole-empties-shape" }
-  | { tag: "hole-disconnects-shape" }
-  | { tag: "vertex-min-points" }
-  | { tag: "compose-failed"; cause: ComposeErrorTag };
 
 export interface OpOk {
   kind: "ok";
@@ -58,21 +44,19 @@ export interface OpOk {
   preselect?: Selection | null;
 }
 
-export interface OpWarning {
+export type OpWarning = {
   kind: "warning";
   shape: AuthoringShape;
   preselect?: Selection | null;
-  tag: WarnTag;
-}
+} & WarnTag;
 
-export type OpError = { kind: "error" } & ApplyErrorTag;
+export type OpError = { kind: "error" } & ErrorTag;
 
-// "invalid" is for unreachable-from-sound-UI cases: an Op that references a
-// vertex/hole index that doesn't exist, or asks for an operation on a prim
-// kind that doesn't support it (e.g. move-hole-center on a polygon hole).
-// editor.ts logs + throws on this; window.onerror surfaces the boot-overlay.
-// Reason is an English diagnostic — not localizable but only ever shown via
-// a thrown exception, which is exempt from the no-text-in-geom rule.
+// "invalid" means the Op's contract was violated — an out-of-range index, a
+// negative radius, a kind mismatch (e.g. move-disk-center on a polygon).
+// Consumers should treat this as a bug and crash; the diagnostic in
+// `reason` is the only English string geom emits, exempt from the
+// no-text-in-geom rule because it is never user-visible by contract.
 export interface OpInvalid {
   kind: "invalid";
   reason: string;
@@ -82,9 +66,9 @@ export type ApplyResult = OpOk | OpWarning | OpError | OpInvalid;
 
 // Op-validity convention:
 //   - degenerate ops (rectangle with zero width or height; radius == 0) are
-//     valid and return ok with the base unchanged. UI doesn't have to clamp.
+//     valid and return ok with the base unchanged. Callers don't need to clamp.
 //   - negative radius / NaN can only come from a buggy op-builder; those are
-//     invalid (the editor crashes via window.onerror).
+//     invalid (contract violation).
 
 export function apply(base: AuthoringShape, op: Op): ApplyResult {
   switch (op.kind) {
@@ -119,7 +103,7 @@ function paintRect(base: AuthoringShape, p1: Vec2, p2: Vec2): ApplyResult {
   // and would create a disconnected shape.
   const outerMP: MultiPolygon = polygonClipping.union(baseOuterMP, [[outlineToRing(rect)]]);
   if (outerMP.length === 0) return invalid("paint-rect: union produced empty MultiPolygon");
-  if (outerMP.length > 1)   return err({ tag: "paint-disconnected" });
+  if (outerMP.length > 1)   return err({ tag: "disconnects-shape" });
 
   const piece = outerMP[0]!;
   const newOuter = ringToOutline(piece[0]!);
@@ -136,7 +120,7 @@ function paintRect(base: AuthoringShape, p1: Vec2, p2: Vec2): ApplyResult {
     holes: [...base.holes, ...computedHoles],
   };
 
-  return finalize(candidate, { kind: "outer", index: 0 }, wasDisk ? "circle-lost" : null);
+  return finalize(candidate, { kind: "outer", index: 0 }, wasDisk ? { tag: "circle-lost" } : null);
 }
 
 // ----- erase-rect -----
@@ -177,8 +161,8 @@ function eraseRect(base: AuthoringShape, p1: Vec2, p2: Vec2): ApplyResult {
     ? polygonClipping.difference(outerMP, allHolesMP)
     : outerMP;
   const remaining = polygonClipping.difference(filled, rectMP);
-  if (remaining.length === 0) return err({ tag: "erase-empties-shape" });
-  if (remaining.length > 1)   return err({ tag: "erase-cuts-shape" });
+  if (remaining.length === 0) return err({ tag: "empties-shape" });
+  if (remaining.length > 1)   return err({ tag: "disconnects-shape" });
 
   // Deconstruct. piece[0] is the new outer; piece[1..] are emergent holes.
   const piece = remaining[0]!;
@@ -200,7 +184,7 @@ function eraseRect(base: AuthoringShape, p1: Vec2, p2: Vec2): ApplyResult {
   const preselect: Selection = newPolyHoles.length > 0
     ? { kind: "hole", index: candidate.holes.length - 1 }
     : { kind: "outer", index: 0 };
-  return finalize(candidate, preselect, consumesCircle ? "circle-lost" : null);
+  return finalize(candidate, preselect, consumesCircle ? { tag: "circle-lost" } : null);
 }
 
 // ----- add-hole -----
@@ -235,7 +219,7 @@ function addHoleAt(base: AuthoringShape, center: Vec2, r: number): ApplyResult {
   const holeMP: MultiPolygon = [[holeRing]];
 
   const inside = polygonClipping.intersection(holeMP, outerMP);
-  if (inside.length === 0) return err({ tag: "hole-outside-shape" });
+  if (inside.length === 0) return warnNoop(base, { tag: "hole-outside-shape" });
 
   const outside = polygonClipping.difference(holeMP, outerMP);
   const crossesOuter = outside.length > 0;
@@ -278,8 +262,8 @@ function addHoleAt(base: AuthoringShape, center: Vec2, r: number): ApplyResult {
     ? polygonClipping.difference(outerMP, survivingHolesMP)
     : outerMP;
   const newFilled = polygonClipping.difference(filled, biteMP);
-  if (newFilled.length === 0) return err({ tag: "hole-empties-shape" });
-  if (newFilled.length > 1)   return err({ tag: "hole-disconnects-shape" });
+  if (newFilled.length === 0) return err({ tag: "empties-shape" });
+  if (newFilled.length > 1)   return err({ tag: "disconnects-shape" });
 
   const piece = newFilled[0]!;
   const newOuter = ringToOutline(piece[0]!);
@@ -299,7 +283,7 @@ function addHoleAt(base: AuthoringShape, center: Vec2, r: number): ApplyResult {
   const preselect: Selection = emergentHoles.length > 0
     ? { kind: "hole", index: candidate.holes.length - 1 }
     : { kind: "outer", index: 0 };
-  return finalize(candidate, preselect, "circle-lost");
+  return finalize(candidate, preselect, { tag: "circle-lost" });
 }
 
 // ----- move-vert / delete-vert / insert-vert -----
@@ -318,7 +302,7 @@ function deleteVert(base: AuthoringShape, sel: Selection, index: number): ApplyR
   const ol = outlineForSel(base, sel);
   if (ol === null) return invalid(`delete-vert: selection ${selDesc(sel)} has no editable outline`);
   if (index < 0 || index >= ol.length) return invalid(`delete-vert: index ${index} out of range`);
-  if (ol.length <= 3) return err({ tag: "vertex-min-points" });
+  if (ol.length <= 3) return err({ tag: "breaks-polygon" });
   const newOl = ol.filter((_, i) => i !== index).map((p) => ({ x: p.x, y: p.y }));
   const candidate = withOutlineReplaced(base, sel, newOl);
   if (!candidate) return invalid(`delete-vert: failed to apply outline to selection ${selDesc(sel)}`);
@@ -517,20 +501,22 @@ function selDesc(sel: Selection): string {
 function finalize(
   candidate: AuthoringShape,
   preselect: Selection | null,
-  warning: WarnTag | null,
+  opWarning: WarnTag | null,
 ): ApplyResult {
   const r = compose(candidate);
   if (!r.ok) {
-    // Strip the `ok: false` discriminant so we hand a bare ComposeErrorTag
-    // to the wrapping ApplyError.
-    const { ok: _ok, ...cause } = r;
-    return err({ tag: "compose-failed", cause });
+    const { ok: _ok, ...tag } = r;
+    return err(tag);
   }
-  if (warning !== null) return { kind: "warning", shape: candidate, preselect, tag: warning };
+  // Op-level warning (e.g. circle-lost) takes precedence over compose's
+  // warning (a stale offending hole) — the user wants feedback about the
+  // action they just took.
+  const w = opWarning ?? r.warning ?? null;
+  if (w !== null) return { kind: "warning", shape: candidate, preselect, ...w };
   return { kind: "ok", shape: candidate, preselect };
 }
 
-function err(tag: ApplyErrorTag): OpError {
+function err(tag: ErrorTag): OpError {
   return { kind: "error", ...tag };
 }
 
@@ -538,8 +524,14 @@ function invalid(reason: string): OpInvalid {
   return { kind: "invalid", reason };
 }
 
-// Returned for degenerate-but-valid ops (zero-area rect, zero radius).
-// Same shape as in, no preselect change — UI keeps the cursor where it was.
+// Degenerate-but-valid ops (zero-area rect, zero radius): base unchanged,
+// no selection change, no message.
 function noop(base: AuthoringShape): OpOk {
   return { kind: "ok", shape: base, preselect: null };
+}
+
+// Op was geometrically a no-op but cost the user something they should
+// know about (today: a hole placed outside the shape — silently dropped).
+function warnNoop(base: AuthoringShape, warning: WarnTag): OpWarning {
+  return { kind: "warning", shape: base, preselect: null, ...warning };
 }
