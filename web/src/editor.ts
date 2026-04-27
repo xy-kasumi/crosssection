@@ -5,9 +5,10 @@
 import type { AuthoringShape, Outline, Selection, Vec2 } from "./authoring.ts";
 import {
   draw,
-  fitView,
   hitHandle,
+  makeView,
   screenToWorld,
+  targetHalfSpan,
   type Handle,
   type View,
 } from "./canvas.ts";
@@ -27,10 +28,16 @@ export class Editor {
   private view: View;
   private handles: Handle[] = [];
 
-  // Drag state
+  // halfSpan (mm) is animated. The grid is rebuilt each frame from the
+  // current value while it eases toward the target.
+  private currentHalfSpan: number;
+  private targetHalfSpan: number;
+  private rafId: number | null = null;
+
+  // Drag state. While set, refit is suppressed — the user shouldn't see the
+  // grid jumping mid-edit.
   private drag: null | {
     handle: Handle;
-    // For interior drag of an entire prim: lastWorld position
     lastWorld: Vec2;
   } = null;
 
@@ -38,7 +45,9 @@ export class Editor {
     this.canvas = canvas;
     this.cb = cb;
     this.shape = initial;
-    this.view = fitView(canvas, initial);
+    this.currentHalfSpan = targetHalfSpan(initial);
+    this.targetHalfSpan = this.currentHalfSpan;
+    this.view = makeView(canvas, this.currentHalfSpan);
     this.attachListeners();
   }
 
@@ -46,11 +55,16 @@ export class Editor {
 
   getShape(): AuthoringShape { return this.shape; }
 
-  setShape(s: AuthoringShape): void {
+  // refit:false skips the viewport refit — used while debouncing rapid
+  // size-input typing, so the grid doesn't chase every keystroke. The
+  // shape itself still updates immediately so the user can see what they
+  // typed; the grid scale catches up on the next refit() call.
+  setShape(s: AuthoringShape, opts: { refit?: boolean } = {}): void {
     this.shape = s;
     this.selection = null;
     this.cb.onSelectionChange(null);
-    this.refit();
+    if (opts.refit !== false) this.refit();
+    else this.render();
     this.cb.onChange();
   }
 
@@ -66,11 +80,41 @@ export class Editor {
     this.render();
   }
 
-  // Refit the viewport to the current shape (call when shape extents change).
+  // Refit the viewport to the current shape. During a drag we don't change
+  // halfSpan (would yank the grid under the user's cursor); we still rebuild
+  // the view at the current halfSpan in case the canvas itself was resized.
   refit(): void {
-    this.view = fitView(this.canvas, this.shape);
-    this.render();
+    if (this.drag) {
+      this.view = makeView(this.canvas, this.currentHalfSpan);
+      this.render();
+      return;
+    }
+    const want = targetHalfSpan(this.shape);
+    if (want === this.targetHalfSpan && want === this.currentHalfSpan) {
+      this.view = makeView(this.canvas, this.currentHalfSpan);
+      this.render();
+      return;
+    }
+    this.targetHalfSpan = want;
+    if (this.rafId === null) this.rafId = requestAnimationFrame(this.tickAnim);
   }
+
+  private tickAnim = (): void => {
+    this.rafId = null;
+    const tgt = this.targetHalfSpan;
+    const cur = this.currentHalfSpan;
+    // Approach geometrically — log-space interpolation feels right for span
+    // changes that span an order of magnitude (e.g. 5 → 50).
+    const k = 0.20;
+    let next = Math.exp(Math.log(cur) + (Math.log(tgt) - Math.log(cur)) * k);
+    if (Math.abs(tgt - next) / tgt < 0.005) next = tgt;
+    this.currentHalfSpan = next;
+    this.view = makeView(this.canvas, this.currentHalfSpan);
+    this.render();
+    if (this.currentHalfSpan !== tgt) {
+      this.rafId = requestAnimationFrame(this.tickAnim);
+    }
+  };
 
   render(): void {
     this.handles = draw(this.canvas, this.view, this.shape, this.composed, this.selection);
@@ -157,6 +201,9 @@ export class Editor {
   private onMouseUp = (): void => {
     if (this.drag) {
       this.drag = null;
+      // The shape's extents may have changed during the drag; now that the
+      // user has let go, refit (animating any halfSpan jump).
+      this.refit();
     }
   };
 

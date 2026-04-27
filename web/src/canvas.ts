@@ -1,6 +1,11 @@
 // Render the AuthoringShape with selection handles. The composed CoreShape
 // (output of compose()) is what's drawn as the filled silhouette; handles
 // are drawn from the AuthoringShape so they track the user's primitives.
+//
+// Grid: centered on origin. The half-span (one side of the grid) snaps to
+// engineering values {1,2,5} × 10^k that comfortably contain the shape;
+// the minor unit is unitForSpan(halfSpan) (always a power of 10). When
+// halfSpan/unit > 5, every 5th minor line gets emphasized as a major line.
 
 import type { Shape as CoreShape } from "@core/shape.ts";
 import type { AuthoringShape, Outline, Selection, Vec2 } from "./authoring.ts";
@@ -13,6 +18,8 @@ export interface View {
   offsetY: number;     // px
   cssW: number;
   cssH: number;
+  halfSpan: number;    // grid extent (mm), one side
+  unit: number;        // minor line spacing (mm)
 }
 
 export interface Handle {
@@ -28,8 +35,33 @@ export interface Handle {
 
 const HANDLE_RADIUS_PX = 5;
 const EDGE_HANDLE_RADIUS_PX = 4;
+const FIT_MARGIN = 1.15;        // halfSpan must be >= FIT_MARGIN * max abs world coord
+const CANVAS_INSET_PX = 24;     // visual inset around grid for labels/breathing room
 
-export function fitView(canvas: HTMLCanvasElement, shape: AuthoringShape): View {
+// Engineering ladder (1, 2, 5 per decade) for halfSpan choices.
+const ENG_SPANS: number[] = (() => {
+  const out: number[] = [];
+  for (let p = -3; p <= 4; p++) for (const m of [1, 2, 5]) out.push(m * Math.pow(10, p));
+  out.sort((a, b) => a - b);
+  return out;
+})();
+
+export function targetHalfSpan(shape: AuthoringShape): number {
+  const bbox = authoringBBox(shape);
+  if (!bbox) return 5;
+  const m = Math.max(Math.abs(bbox.minX), Math.abs(bbox.maxX), Math.abs(bbox.minY), Math.abs(bbox.maxY));
+  const want = Math.max(0.05, m * FIT_MARGIN);
+  for (const s of ENG_SPANS) if (s >= want) return s;
+  return ENG_SPANS[ENG_SPANS.length - 1]!;
+}
+
+export function unitForSpan(halfSpan: number): number {
+  // Choose the largest power-of-10 unit such that halfSpan/unit ≥ 5
+  // (i.e. at least 5 minor lines per side).
+  return Math.pow(10, Math.floor(Math.log10(halfSpan / 5)));
+}
+
+export function makeView(canvas: HTMLCanvasElement, halfSpan: number): View {
   const dpr = window.devicePixelRatio || 1;
   const cssW = canvas.clientWidth;
   const cssH = canvas.clientHeight;
@@ -37,20 +69,16 @@ export function fitView(canvas: HTMLCanvasElement, shape: AuthoringShape): View 
     canvas.width = cssW * dpr;
     canvas.height = cssH * dpr;
   }
-  const bbox = authoringBBox(shape);
-  if (!bbox) {
-    return { scale: 1, offsetX: cssW / 2, offsetY: cssH / 2, cssW, cssH };
-  }
-  const w = Math.max(1e-6, bbox.maxX - bbox.minX);
-  const h = Math.max(1e-6, bbox.maxY - bbox.minY);
-  const margin = 0.18; // fraction of available size left as padding
-  const scale = Math.min(cssW / w, cssH / h) * (1 - 2 * margin);
-  const cx = (bbox.minX + bbox.maxX) / 2;
-  const cy = (bbox.minY + bbox.maxY) / 2;
-  const offsetX = cssW / 2 - cx * scale;
-  // Flip Y so +y points up
-  const offsetY = cssH / 2 + cy * scale;
-  return { scale, offsetX, offsetY, cssW, cssH };
+  const cssMin = Math.min(cssW, cssH);
+  const innerPx = Math.max(1, cssMin - 2 * CANVAS_INSET_PX);
+  const scale = innerPx / (2 * halfSpan);
+  return {
+    scale,
+    offsetX: cssW / 2,
+    offsetY: cssH / 2,
+    cssW, cssH, halfSpan,
+    unit: unitForSpan(halfSpan),
+  };
 }
 
 export function worldToScreen(v: View, x: number, y: number): { sx: number; sy: number } {
@@ -74,14 +102,7 @@ export function draw(
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, view.cssW, view.cssH);
 
-  // Faint origin axes
-  ctx.strokeStyle = "rgba(127,127,127,0.18)";
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  const o = worldToScreen(view, 0, 0);
-  ctx.moveTo(0, o.sy); ctx.lineTo(view.cssW, o.sy);
-  ctx.moveTo(o.sx, 0); ctx.lineTo(o.sx, view.cssH);
-  ctx.stroke();
+  drawGrid(ctx, view);
 
   // Filled silhouette (the FEM-facing composed shape — what the solver sees)
   if (composed) {
@@ -127,6 +148,92 @@ export function draw(
 
   drawHandles(ctx, view, handles);
   return handles;
+}
+
+function drawGrid(ctx: CanvasRenderingContext2D, view: View): void {
+  const { halfSpan, unit, scale, offsetX, offsetY, cssW, cssH } = view;
+  const minorN = Math.round(halfSpan / unit);   // lines per side
+  const majorEvery = 5;
+  const showMajor = minorN > majorEvery;
+
+  const hLineXs: number[] = []; // vertical minor (x = i*unit)
+  const vLineYs: number[] = []; // horizontal minor (y = i*unit)
+  const majXs: number[] = [];
+  const majYs: number[] = [];
+
+  for (let i = -minorN; i <= minorN; i++) {
+    const isAxis = i === 0;
+    const isMajor = showMajor && i % majorEvery === 0 && !isAxis;
+    if (isAxis) continue; // axes drawn separately at higher contrast
+    const w = i * unit;
+    const sx = offsetX + w * scale;
+    const sy = offsetY - w * scale;
+    if (isMajor) { majXs.push(sx); majYs.push(sy); }
+    else         { hLineXs.push(sx); vLineYs.push(sy); }
+  }
+
+  const drawLines = (xs: number[], ys: number[], stroke: string, width: number): void => {
+    ctx.strokeStyle = stroke;
+    ctx.lineWidth = width;
+    ctx.beginPath();
+    for (const sx of xs) { ctx.moveTo(sx, 0); ctx.lineTo(sx, cssH); }
+    for (const sy of ys) { ctx.moveTo(0, sy); ctx.lineTo(cssW, sy); }
+    ctx.stroke();
+  };
+
+  drawLines(hLineXs, vLineYs, "rgba(127,127,127,0.10)", 1);
+  if (showMajor) drawLines(majXs, majYs, "rgba(127,127,127,0.22)", 1);
+
+  // Axes (origin lines): slightly stronger.
+  ctx.strokeStyle = "rgba(127,127,127,0.45)";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(offsetX, 0); ctx.lineTo(offsetX, cssH);
+  ctx.moveTo(0, offsetY); ctx.lineTo(cssW, offsetY);
+  ctx.stroke();
+
+  // Tick numbers: every minor when there are no majors, every major otherwise.
+  // Skip 0 (axis intersection) and the outermost tick (overlaps the X/Y label).
+  const tickStep = showMajor ? majorEvery : 1;
+  ctx.fillStyle = "rgba(80,80,80,0.7)";
+  ctx.font = "10px ui-monospace, SFMono-Regular, monospace";
+  for (let i = -minorN + 1; i <= minorN - 1; i++) {
+    if (i === 0 || i % tickStep !== 0) continue;
+    const w = i * unit;
+    const sx = offsetX + w * scale;
+    const sy = offsetY - w * scale;
+    // Number along X axis: just below the axis line.
+    ctx.textAlign = "center";
+    ctx.textBaseline = "top";
+    ctx.fillText(formatTick(w), sx, offsetY + 3);
+    // Number along Y axis: just to the left of the axis line.
+    ctx.textAlign = "right";
+    ctx.textBaseline = "middle";
+    ctx.fillText(formatTick(w), offsetX - 4, sy);
+  }
+
+  // Axis labels at the ends of the axes.
+  ctx.fillStyle = "rgba(80,80,80,0.85)";
+  ctx.font = "italic 12px ui-monospace, SFMono-Regular, monospace";
+  ctx.textAlign = "right";
+  ctx.textBaseline = "middle";
+  ctx.fillText("X", cssW - 4, offsetY - 8);
+  ctx.textAlign = "center";
+  ctx.textBaseline = "top";
+  ctx.fillText("Y", offsetX + 10, 4);
+
+  // Unit marker, bottom-right.
+  ctx.fillStyle = "rgba(80,80,80,0.6)";
+  ctx.font = "10px ui-monospace, SFMono-Regular, monospace";
+  ctx.textAlign = "right";
+  ctx.textBaseline = "alphabetic";
+  ctx.fillText("mm", cssW - 6, cssH - 6);
+}
+
+function formatTick(v: number): string {
+  if (Number.isInteger(v)) return String(v);
+  // Trim trailing zeros / dangling dot so 0.10 → "0.1", 1.00 → "1".
+  return v.toFixed(3).replace(/0+$/, "").replace(/\.$/, "");
 }
 
 function pushDiskHandles(out: Handle[], cx: number, cy: number, r: number): void {

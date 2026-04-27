@@ -183,17 +183,33 @@ function applyPreset(preset: Preset, vals: Record<string, number>): void {
   showSizeInput(preset, vals);
 }
 
-function setShapeFromPreset(preset: Preset, vals: Record<string, number>): void {
+function setShapeFromPreset(
+  preset: Preset,
+  vals: Record<string, number>,
+  opts: { refit?: boolean } = {},
+): void {
   switch (preset) {
-    case "rod":       editor.setShape(rodOf(vals.D!)); break;
-    case "rect":      editor.setShape(rectShapeOf(vals.W!, vals.H!)); break;
-    case "extrusion": editor.setShape(extrusionOf(vals.S!)); break;
+    case "rod":       editor.setShape(rodOf(vals.D!), opts); break;
+    case "rect":      editor.setShape(rectShapeOf(vals.W!, vals.H!), opts); break;
+    case "extrusion": editor.setShape(extrusionOf(vals.S!), opts); break;
   }
   // Preset-driven shape changes don't count as user modification.
   userModified = false;
 }
 
+// Track the pending grid-refit while the user is typing in the size-input.
+// Each keystroke updates the shape immediately but only schedules a refit;
+// the grid catches up after a short idle period. This avoids the grid
+// scrubbing rapidly when the user is mid-edit (e.g. "32" → backspace → "3"
+// → "33" should not pulse the grid down to ±5 mm and back).
+let sizeInputRefitTimer: number | null = null;
+const SIZE_INPUT_REFIT_DEBOUNCE_MS = 350;
+
 function showSizeInput(preset: Preset, initial: Record<string, number>): void {
+  if (sizeInputRefitTimer !== null) {
+    clearTimeout(sizeInputRefitTimer);
+    sizeInputRefitTimer = null;
+  }
   const form = els.sizeInput;
   form.innerHTML = "";
   form.hidden = false;
@@ -224,7 +240,12 @@ function showSizeInput(preset: Preset, initial: Record<string, number>): void {
       if (!isFinite(v) || v <= 0) return;
       vals[fields[i]!.name] = v;
     }
-    setShapeFromPreset(preset, vals);
+    setShapeFromPreset(preset, vals, { refit: false });
+    if (sizeInputRefitTimer !== null) clearTimeout(sizeInputRefitTimer);
+    sizeInputRefitTimer = window.setTimeout(() => {
+      sizeInputRefitTimer = null;
+      editor.refit();
+    }, SIZE_INPUT_REFIT_DEBOUNCE_MS);
   };
 
   for (let i = 0; i < inputs.length; i++) {
@@ -259,6 +280,13 @@ function showSizeInput(preset: Preset, initial: Record<string, number>): void {
 }
 
 function dismissSizeInput(): void {
+  // Flush any pending refit so the grid lands on the final value
+  // immediately when the user confirms or focuses out.
+  if (sizeInputRefitTimer !== null) {
+    clearTimeout(sizeInputRefitTimer);
+    sizeInputRefitTimer = null;
+    editor.refit();
+  }
   els.sizeInput.hidden = true;
   els.sizeInput.innerHTML = "";
 }

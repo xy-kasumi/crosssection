@@ -101,6 +101,7 @@ main.start-collapsed .start-pane-content {
   font-size: 13px;
   z-index: 2;
 }
+.size-input-overlay[hidden] { display: none; }
 @media (prefers-color-scheme: dark) {
   .size-input-overlay { background: rgba(26,26,26,0.92); border-color: #333; }
 }
