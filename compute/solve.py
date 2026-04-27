@@ -48,6 +48,10 @@ def solve(shape, mesh_size):
     ixx_c, iyy_c, ixy_c = sec.get_ic()
     cx, cy = sec.get_c()
 
+    # Element count is reported as a small "N elems FEM" line in the UI to
+    # signal that this is real FEM rather than a fitted heuristic.
+    n_elems = len(geom.mesh["triangles"]) if isinstance(geom.mesh, dict) else int(getattr(geom.mesh, "num_elements", 0))
+
     return {
         "ixx_c": float(ixx_c),
         "iyy_c": float(iyy_c),
@@ -56,4 +60,5 @@ def solve(shape, mesh_size):
         "area":  float(sec.get_area()),
         "cx":    float(cx),
         "cy":    float(cy),
+        "n_elems": int(n_elems),
     }

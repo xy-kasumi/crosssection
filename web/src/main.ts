@@ -23,7 +23,7 @@ import { toWire } from "@core/shape.ts";
 const els = {
   main:             document.querySelector("main") as HTMLElement,
   canvas:           document.getElementById("cv") as HTMLCanvasElement,
-  startPane:        document.getElementById("start-pane")        as HTMLElement,
+  startSection:     document.getElementById("start-section")     as HTMLElement,
   startPaneToggle:  document.getElementById("start-pane-toggle") as HTMLButtonElement,
   startBtns:        Array.from(document.querySelectorAll<HTMLButtonElement>(".start-btn")),
   sizeInput:        document.getElementById("size-input")        as HTMLFormElement,
@@ -35,6 +35,8 @@ const els = {
   iy:               document.getElementById("iy")!,
   j:                document.getElementById("j")!,
   status:           document.getElementById("status")!,
+  bootOverlay:      document.getElementById("boot-overlay")       as HTMLElement,
+  bootCard:         document.getElementById("boot-card")          as HTMLElement,
 };
 
 // Tracks whether the user has touched the shape since the last preset load.
@@ -63,21 +65,65 @@ const editor = new Editor(els.canvas, defaultDisk(), {
   },
 });
 
+// ----- boot state -----
+//
+// Boot is non-blocking: the editor is fully live from page load. We just
+// can't compute numbers until the worker reports ready. Most users never
+// notice — they're picking a preset or starting to draw, and by the time
+// they want a number it's already there. The overlay only appears in the
+// rare path where boot fails (no WASM, slow/blocked network, etc.) so we
+// can tell the user clearly rather than leave them editing in vain.
+
+const BOOT_TIMEOUT_MS = 45_000;
+let bootResolved = false;
+const bootTimeout = window.setTimeout(() => {
+  if (!bootResolved) showBootFailure(
+    "Setup timed out after 45 seconds. The Python runtime probably couldn't be downloaded.",
+  );
+}, BOOT_TIMEOUT_MS);
+
+function showBootFailure(detail: string): void {
+  bootResolved = true;
+  clearTimeout(bootTimeout);
+  els.bootCard.innerHTML = `
+    <div class="boot-msg">Couldn't start the FEM solver.</div>
+    <p>This tool needs a recent browser with WebAssembly support and a working internet connection (the Python runtime is downloaded on first load). Try the latest Chrome, Firefox, Edge, or Safari.</p>
+    <button id="boot-reload" type="button">Reload</button>
+    <details><summary>Details</summary><pre id="boot-error-text"></pre></details>
+  `;
+  document.getElementById("boot-error-text")!.textContent = detail;
+  document.getElementById("boot-reload")!.addEventListener("click", () => location.reload());
+  els.bootOverlay.classList.remove("hidden");
+}
+
 // Pyodide worker
-const worker = new Worker(new URL("./worker.ts", import.meta.url), { type: "module" });
+let worker: Worker;
+try {
+  worker = new Worker(new URL("./worker.ts", import.meta.url), { type: "module" });
+} catch (err) {
+  showBootFailure(`Worker construction failed: ${err instanceof Error ? err.message : String(err)}`);
+  throw err;
+}
 let workerReady = false;
 let nextId = 1;
 let lastDisplayedId = 0;
+
+worker.addEventListener("error", (ev) => {
+  if (!bootResolved) showBootFailure(`Worker crashed during boot: ${ev.message || "unknown error"}`);
+});
 
 worker.addEventListener("message", (ev: MessageEvent<FromWorker>) => {
   const msg = ev.data;
   switch (msg.type) {
     case "progress":
-      els.status.textContent = msg.phase + "…";
+      // Boot progress is debug-only — log it, don't surface to the user.
+      // The editor stays interactive throughout.
+      console.log(`[boot] ${msg.phase}`);
       break;
     case "ready":
       workerReady = true;
-      els.status.textContent = "ready";
+      bootResolved = true;
+      clearTimeout(bootTimeout);
       recompute();
       break;
     case "result": {
@@ -87,11 +133,15 @@ worker.addEventListener("message", (ev: MessageEvent<FromWorker>) => {
       els.iy.textContent = twoSigFigs(msg.result.iyy_c);
       els.j.textContent  = twoSigFigs(msg.result.j);
       setComputing(false);
-      els.status.textContent = `solved in ${msg.ms.toFixed(0)} ms`;
+      els.status.textContent = `${msg.result.n_elems.toLocaleString()} elems FEM`;
       break;
     }
     case "error":
       setComputing(false);
+      if (!bootResolved) {
+        showBootFailure(msg.error);
+        return;
+      }
       setReadouts("—", true);
       els.status.textContent = `error: ${msg.error.split("\n")[0]}`;
       break;
@@ -164,18 +214,11 @@ const PRESET_DEFAULTS: Record<Preset, Record<string, number>> = {
 };
 
 function setStartPaneOpen(open: boolean): void {
-  els.main.classList.toggle("start-collapsed", !open);
-  els.startPaneToggle.textContent = open ? "◀" : "▶";
+  els.startSection.classList.toggle("collapsed", !open);
 }
 
 els.startPaneToggle.addEventListener("click", () => {
-  setStartPaneOpen(els.main.classList.contains("start-collapsed"));
-});
-
-// Refit the canvas viewport once the pane animation finishes (the column
-// width changes, so the canvas size changes too).
-els.main.addEventListener("transitionend", (ev) => {
-  if ((ev as TransitionEvent).propertyName === "grid-template-columns") editor.refit();
+  setStartPaneOpen(els.startSection.classList.contains("collapsed"));
 });
 
 for (const btn of els.startBtns) {

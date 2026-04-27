@@ -11,17 +11,51 @@
     <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
+    <!-- Hidden by default. Only shown when the FEM worker can't start
+         (timeout or runtime error during boot). The editor stays usable
+         until then; results just stay as "—" while loading. -->
+    <div id="boot-overlay" class="boot-overlay hidden">
+      <div class="boot-card error" id="boot-card"></div>
+    </div>
+
     <main>
-      <aside class="start-pane" id="start-pane">
-        <button class="start-pane-toggle" id="start-pane-toggle" type="button" aria-label="toggle start pane">◀</button>
-        <div class="start-pane-content">
-          <h3>Start from</h3>
-          <ul class="start-list">
-            <li><button class="start-btn" data-preset="rod"       type="button">Rod</button></li>
-            <li><button class="start-btn" data-preset="rect"      type="button">Rectangle</button></li>
-            <li><button class="start-btn" data-preset="extrusion" type="button">Extrusion</button></li>
-          </ul>
-        </div>
+      <aside class="left-col" id="start-pane">
+        <section class="left-section" id="start-section">
+          <button class="section-toggle" id="start-pane-toggle" type="button" aria-label="toggle start from">
+            <span class="section-title">Start from</span>
+            <span class="chevron" aria-hidden="true">▾</span>
+          </button>
+          <div class="section-body">
+            <ul class="start-list">
+              <li><button class="start-btn" data-preset="rod"       type="button">Rod</button></li>
+              <li><button class="start-btn" data-preset="rect"      type="button">Rectangle</button></li>
+              <li><button class="start-btn" data-preset="extrusion" type="button">Extrusion</button></li>
+            </ul>
+          </div>
+        </section>
+
+        <section class="results-section">
+          <div class="readouts">
+            <div class="readout">
+              <div class="readout-label">I<sub>x</sub></div>
+              <div class="readout-val" id="ix">—</div>
+              <div class="readout-unit">mm⁴</div>
+            </div>
+            <div class="readout">
+              <div class="readout-label">I<sub>y</sub></div>
+              <div class="readout-val" id="iy">—</div>
+              <div class="readout-unit">mm⁴</div>
+            </div>
+            <div class="readout">
+              <div class="readout-label">J</div>
+              <div class="readout-val" id="j">—</div>
+              <div class="readout-unit">mm⁴</div>
+            </div>
+          </div>
+          <div class="status">
+            <div id="status"></div>
+          </div>
+        </section>
       </aside>
 
       <div class="canvas-col">
@@ -44,30 +78,11 @@
 
       <aside class="panel">
         <section class="prim-list">
-          <h3>Primitives</h3>
+          <h3>Primitives <span class="debug-tag">debug</span></h3>
           <ul id="prim-list"></ul>
         </section>
 
-        <section class="readouts">
-          <div class="readout">
-            <div class="readout-label">I<sub>x</sub></div>
-            <div class="readout-val" id="ix">—</div>
-            <div class="readout-unit">mm⁴</div>
-          </div>
-          <div class="readout">
-            <div class="readout-label">I<sub>y</sub></div>
-            <div class="readout-val" id="iy">—</div>
-            <div class="readout-unit">mm⁴</div>
-          </div>
-          <div class="readout">
-            <div class="readout-label">J</div>
-            <div class="readout-val" id="j">—</div>
-            <div class="readout-unit">mm⁴</div>
-          </div>
-        </section>
-
         <section class="status">
-          <div id="status">starting Python…</div>
           <div class="hint">Pick a tool above to add a rect, erase a rect, or place a hole. Drag handles to edit. Right-click a vertex to delete. Click an empty edge handle to insert a vertex. Esc cancels a tool.</div>
         </section>
       </aside>

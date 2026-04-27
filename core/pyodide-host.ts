@@ -19,6 +19,7 @@ export interface SolveResult {
   area: number;
   cx: number;
   cy: number;
+  n_elems: number;
 }
 
 export interface PyodideHost {

@@ -3,6 +3,80 @@
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
 }
 
+/* Boot overlay: covers the whole viewport while the Pyodide worker boots,
+   and stays up if boot fails. The editor below is rendered but inert until
+   the overlay is dismissed, so the user can't waste effort editing on a
+   tool that won't compute. */
+.boot-overlay {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(255, 255, 255, 0.78);
+  backdrop-filter: blur(2px);
+  z-index: 1000;
+  transition: opacity 0.2s ease;
+}
+@media (prefers-color-scheme: dark) {
+  .boot-overlay { background: rgba(20, 20, 20, 0.78); }
+}
+.boot-overlay.hidden { opacity: 0; pointer-events: none; }
+.boot-card {
+  max-width: 380px;
+  padding: 24px 28px;
+  background: var(--bg, #fff);
+  border: 1px solid var(--border, #e0e0e0);
+  border-radius: 10px;
+  text-align: center;
+  font-size: 13px;
+}
+@media (prefers-color-scheme: dark) {
+  .boot-card { background: #1a1a1a; border-color: #333; }
+}
+.boot-spinner {
+  width: 28px;
+  height: 28px;
+  margin: 0 auto 12px;
+  border: 3px solid rgba(127,127,127,0.25);
+  border-top-color: rgb(80, 130, 230);
+  border-radius: 50%;
+  animation: spin 0.9s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.boot-msg { font-size: 14px; font-weight: 500; }
+.boot-phase {
+  margin-top: 4px;
+  font-size: 11px;
+  opacity: 0.6;
+  font-variant-numeric: tabular-nums;
+}
+.boot-card.error .boot-spinner { display: none; }
+.boot-card.error .boot-msg { color: #c33; }
+.boot-card.error p { margin: 8px 0; line-height: 1.5; opacity: 0.85; text-align: left; }
+.boot-card.error button {
+  margin-top: 12px;
+  padding: 8px 16px;
+  font: inherit;
+  font-size: 13px;
+  border: 1px solid var(--border, #ccc);
+  background: transparent;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.boot-card.error button:hover { background: rgba(127,127,127,0.08); }
+.boot-card.error details { margin-top: 12px; text-align: left; font-size: 11px; }
+.boot-card.error details pre {
+  margin: 6px 0 0;
+  padding: 6px 8px;
+  background: rgba(127,127,127,0.08);
+  border-radius: 4px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 10px;
+  max-height: 120px;
+  overflow: auto;
+}
+
 body {
   margin: 0;
   padding: 0;
@@ -11,46 +85,58 @@ body {
 
 main {
   display: grid;
-  grid-template-columns: 200px minmax(320px, 1fr) 320px;
+  grid-template-columns: 220px minmax(320px, 1fr) 240px;
   gap: 24px;
   padding: 24px;
-  align-items: start;
-  transition: grid-template-columns 0.25s ease;
-}
-main.start-collapsed {
-  grid-template-columns: 32px minmax(320px, 1fr) 320px;
+  align-items: stretch;
 }
 
-.start-pane { position: relative; overflow: hidden; }
-.start-pane-toggle {
-  width: 28px;
-  height: 28px;
-  border: 1px solid var(--border, #ccc);
+.left-col {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  /* Aside has UA margin in some browsers; reset. */
+  margin: 0;
+}
+
+.section-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 4px 2px 8px;
   background: transparent;
-  border-radius: 6px;
-  cursor: pointer;
+  border: 0;
   font: inherit;
-  font-size: 12px;
-  padding: 0;
-}
-.start-pane-toggle:hover { background: rgba(127,127,127,0.08); }
-.start-pane-content {
-  margin-top: 12px;
-  opacity: 1;
-  transition: opacity 0.2s ease;
-}
-main.start-collapsed .start-pane-content {
-  opacity: 0;
-  pointer-events: none;
-}
-.start-pane h3 {
-  margin: 0 0 8px 0;
   font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  opacity: 0.6;
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+  opacity: 0.7;
 }
+.section-toggle:hover { opacity: 1; }
+.section-toggle .chevron {
+  font-size: 10px;
+  transition: transform 0.2s ease;
+  opacity: 0.7;
+}
+.left-section.collapsed .section-toggle .chevron { transform: rotate(-90deg); }
+
+.section-body {
+  overflow: hidden;
+  max-height: 400px;
+  opacity: 1;
+  transition: max-height 0.25s ease, opacity 0.2s ease;
+}
+.left-section.collapsed .section-body {
+  max-height: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
 .start-list {
   list-style: none;
   margin: 0;
@@ -58,6 +144,13 @@ main.start-collapsed .start-pane-content {
   display: flex;
   flex-direction: column;
   gap: 6px;
+}
+
+.results-section {
+  margin-top: auto;        /* push to bottom of left column */
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 .start-btn {
   width: 100%;
@@ -205,6 +298,17 @@ canvas {
   letter-spacing: 0.04em;
   text-transform: uppercase;
   opacity: 0.6;
+}
+.prim-list h3 .debug-tag {
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  margin-left: 4px;
+  padding: 1px 5px;
+  border: 1px solid currentColor;
+  border-radius: 3px;
+  opacity: 0.7;
+  vertical-align: 1px;
 }
 .prim-list ul {
   list-style: none;
