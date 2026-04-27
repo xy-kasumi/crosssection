@@ -23,7 +23,7 @@ export function errorText(e: ErrorTag): string {
     case "empties-shape":
       return "shape would be empty";
     case "disconnects-shape":
-      return "shape would be split into multiple pieces";
+      return "shape would have multiple disjoint pieces";
     case "breaks-polygon":
       return "outline must have at least 3 vertices";
   }
