@@ -51,7 +51,7 @@ export async function boot(options: BootOptions): Promise<PyodideHost> {
   ]);
 
   const micropip = py.pyimport("micropip");
-  // numpy>=2.3.3 vs Pyodide's 2.0.2 mismatch — see pyodide-build/cytriangle/README.md
+  // numpy>=2.3.3 vs Pyodide's 2.0.2 mismatch — see ./pyodide-build/cytriangle/README.md
   await micropip.install(options.cytriangleWheel, py.toPy({ deps: false }));
   await micropip.install("sectionproperties", py.toPy({ deps: true }));
   micropip.destroy();

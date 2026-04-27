@@ -10,14 +10,14 @@ dist/
 .vscode/
 
 # Python venv used to drive `pyodide build` (host-side toolchain, not project source)
-.venv-pyodide-build/
+solver/.venv-pyodide-build/
 
 # Pyodide build artifacts (the source recipe stays; build outputs don't)
-pyodide-build/cytriangle/build/
-pyodide-build/cytriangle/dist/
+solver/pyodide-build/cytriangle/build/
+solver/pyodide-build/cytriangle/dist/
 
-# Note: the vendored wheels under wheels/ ARE the artifact and are checked in.
+# Note: the vendored wheels under solver/wheels/ ARE the artifact and are checked in.
 
 # Local Pyodide wheel cache populated by Node's pyodide loader at runtime
-node_modules/pyodide/*.whl
-node_modules/pyodide/*.zip
+**/node_modules/pyodide/*.whl
+**/node_modules/pyodide/*.zip

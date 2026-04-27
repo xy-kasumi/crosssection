@@ -9,39 +9,28 @@ Two patches the build applies before `pyodide build`:
 
 ## Pinned versions
 
-- Pyodide: **0.27.7** (matches the `pyodide` npm package consumed by `core/pyodide-host.ts`)
+- Pyodide: **0.27.7** (matches the `pyodide` npm package consumed by `solver/pyodide-host.ts`)
 - Cross-build environment: **0.27.7** (Python 3.12.7, Emscripten 3.1.58)
 - cytriangle: **v3.0.2** (latest as of 2026-04, from <https://github.com/m-clare/cytriangle>)
 
-When upgrading any of these, run a full rebuild and re-run `npm test` to confirm numerics are unchanged.
+When upgrading any of these, run a full rebuild and re-run `./test.sh` to confirm numerics are unchanged.
 
 ## One-time toolchain setup
 
 ```bash
-# 1. Python venv with pyodide-build CLI
-python3 -m venv .venv-pyodide-build
-source .venv-pyodide-build/bin/activate
-pip install --upgrade pip pyodide-build
-
-# 2. Install Pyodide cross-build environment matching the runtime
-pyodide xbuildenv install 0.27.7
-
-# 3. Install matching Emscripten SDK
-pyodide xbuildenv install-emscripten
+solver/pyodide-build/setup-toolchain.sh
 ```
 
-This populates `~/.cache/.pyodide-xbuildenv-*/0.27.7/`.
+This creates `solver/.venv-pyodide-build/` and populates `~/.cache/.pyodide-xbuildenv-*/0.27.7/` with the matching Emscripten SDK (~2 GB on disk).
 
 ## Build
 
-See `build.sh` in this directory. It clones cytriangle, runs `pyodide build`, and copies the wheel into `../../wheels/`.
+```bash
+solver/pyodide-build/cytriangle/build.sh
+```
+
+It clones cytriangle into `/tmp`, runs `pyodide build`, and copies the wheel into `solver/wheels/`.
 
 ## Verifying the build
 
-After building, run from the repo root:
-
-```bash
-npm test
-```
-
-If numerics drift from previous runs, the wheel is suspect — check the source commit, recompile, and diff the resulting wheel.
+After building, run `./test.sh` from the repo root. If numerics drift from previous runs, the wheel is suspect — check the source commit, recompile, and diff the resulting wheel.

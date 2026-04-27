@@ -13,13 +13,12 @@
     "isolatedModules": true,
     "verbatimModuleSyntax": false,
     "forceConsistentCasingInFileNames": true,
-    "lib": ["ES2022", "DOM"],
+    "lib": ["ES2022"],
     "baseUrl": ".",
     "paths": {
-      "@solver/*": ["solver/*"],
-      "@geom/*": ["geom/*"]
+      "@solver/*": ["../solver/*"]
     }
   },
-  "include": ["solver/**/*.ts", "geom/**/*.ts"],
-  "exclude": ["solver/worker.ts", "solver/client.ts"]
+  "include": ["**/*.ts"],
+  "exclude": ["node_modules"]
 }
