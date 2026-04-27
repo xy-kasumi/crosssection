@@ -202,7 +202,7 @@ export class Editor {
         }
         return;
       }
-      this.drag = { handle: hit, lastWorld: screenToWorld(this.view, sx, sy) };
+      this.drag = { handle: hit, lastWorld: this.snapWorld(screenToWorld(this.view, sx, sy)) };
       return;
     }
     // 2. Hit-test prim interior. If interior of an unselected prim, select
@@ -213,9 +213,10 @@ export class Editor {
       const sameAsBefore = this.selection && sameSelection(this.selection, sel);
       this.setSelection(sel);
       if (sameAsBefore) {
+        const start = this.snapWorld(w);
         this.drag = {
-          handle: { kind: "vertex", selection: sel, x: w.x, y: w.y, index: -1 }, // placeholder; index=-1 means whole-prim drag
-          lastWorld: w,
+          handle: { kind: "vertex", selection: sel, x: start.x, y: start.y, index: -1 }, // placeholder; index=-1 means whole-prim drag
+          lastWorld: start,
         };
       }
     } else {
@@ -232,9 +233,14 @@ export class Editor {
       return;
     }
     if (!this.drag) return;
-    const w = this.cursorWorld;
+    // Snap the cursor before deriving the drag step so vertex/center moves
+    // and whole-prim translations both quantize to the grid when snap is on.
+    // Whole-prim drag uses (dx, dy); per-handle drag uses absolute w. Both
+    // need a snapped w for the geometry to land on grid intersections.
+    const w = this.snapWorld(this.cursorWorld);
     const dx = w.x - this.drag.lastWorld.x;
     const dy = w.y - this.drag.lastWorld.y;
+    if (dx === 0 && dy === 0) return; // cursor moved within a snap cell
     this.drag.lastWorld = w;
     this.applyDrag(this.drag.handle, w, dx, dy);
     this.cb.onChange();
