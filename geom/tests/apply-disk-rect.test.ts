@@ -1,19 +1,14 @@
-// Disk-outer + rect-tool interactions. The user flagged two bugs from
-// pre-rearchitecture days that this file pins down:
+// Disk-outer + rect-tool interactions. When an outer-modifying op turns a
+// disk into a polygon, that's a circle-loss — same UX consequence as a
+// circle hole becoming a polygon. Both rect tools must report it as
+// `warning`, not `ok` (silent identity loss) or `error`.
 //
-//   1. rod (D=5) → erase-rect crossing the disk edge → currently `ok` (no
-//      warning), but the disk has been polygonized — drag-center/radius
-//      are gone. The user expects `warning` because circle identity was
-//      consumed.
-//
-//   2. rod (D=5) → paint-rect crossing the disk edge → currently `error`
-//      ("rect doesn't overlap the existing shape") because paint-rect
-//      approximates the disk as its inscribed square. The expected
-//      result is `warning` (paint succeeded, disk → polygon).
-//
-// Both reduce to the same root: when an outer-modifying op turns a disk
-// into a polygon, that's a circle-loss, same UX consequence as the
-// circle-hole-becomes-polygon case.
+// Two regressions this file pins down specifically:
+//   - paint-rect must polygonize the disk via outerMultiPolygonOf, not via
+//     the inscribed square (which excludes 36% of the area and falsely
+//     reports "doesn't overlap" for rects that genuinely cross the edge).
+//   - erase-rect must flag `consumesCircle` for a disk base, not just for
+//     touched circle holes.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";

@@ -2,9 +2,7 @@
 // `result.kind`; pulled out into per-test cases when there's downstream
 // shape-structure to inspect.
 //
-// The bug cases the user hit pre-rearchitecture (rod → erase-rect /
-// paint-rect crossing the disk boundary, currently mis-reporting) live in
-// apply-rod-to-rect.test.ts and intentionally land alongside their fix.
+// Disk-outer + rect-tool interactions live in apply-disk-rect.test.ts.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";

@@ -1,8 +1,8 @@
 // Translate-prim associativity. The editor doesn't actually chain frames
-// (Phase D's drag is base-relative), but the kernel property still has to
-// hold: dragging by `a` and then by `b` should land in the same place as
-// dragging by `a + b`. If this ever drifted, a slow drag and a fast drag
-// over the same distance would produce different geometry — confusing UX.
+// (its drag is base-relative), but the kernel property still has to hold:
+// dragging by `a` and then by `b` should land in the same place as dragging
+// by `a + b`. If this ever drifted, a slow drag and a fast drag over the
+// same distance would produce different geometry — confusing UX.
 //
 // Property only holds when both intermediate and final results are clean
 // (no polygonization). Tests pick deltas that keep the prim well inside.

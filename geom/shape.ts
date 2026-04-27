@@ -2,10 +2,6 @@
 // FEM-facing types — same structural data but renamed to prevent the two
 // from accidentally crossing the boundary. compose() is the single
 // translation point.
-//
-// Phase D will tighten this to the readonly+Vec2+composed-embedded form
-// the geom kernel ultimately wants. Phase C just relocates the code so
-// the module boundary is in place.
 
 import polygonClipping, { type MultiPolygon } from "polygon-clipping";
 import type { SolverShape, Polygon as SolverPolygon } from "@solver/shape.ts";
