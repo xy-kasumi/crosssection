@@ -290,13 +290,15 @@ export class Editor {
     }
 
     // 2. Hit-test prim interior. If interior of an unselected prim, select
-    //    it. If already selected, start moving the whole prim.
+    //    it. If already selected and it's a circle prim (disk or circle hole),
+    //    start moving it as a whole. Polygon outers and polygon holes don't
+    //    translate as a unit — vertex drags are the only mutation.
     const w = screenToWorld(this.view, sx, sy);
     const sel = this.pickPrimAt(w);
     if (sel) {
       const sameAsBefore = this.selection && sameSelection(this.selection, sel);
       this.setSelection(sel);
-      if (sameAsBefore) {
+      if (sameAsBefore && this.isCirclePrim(sel)) {
         const start = this.snapWorld(w);
         const placeholder: Handle = { kind: "vertex", selection: sel, x: start.x, y: start.y, index: -1 };
         this.beginDrag(placeholder, start, true);
@@ -305,6 +307,12 @@ export class Editor {
       this.setSelection(null);
     }
   };
+
+  private isCirclePrim(sel: Selection): boolean {
+    if (sel.kind === "disk") return true;
+    if (sel.kind === "hole") return this.shape.holes[sel.index]?.kind === "circle";
+    return false;
+  }
 
   private beginDrag(handle: Handle, startCursor: Vec2, isWholePrim: boolean = false): void {
     this.drag = {

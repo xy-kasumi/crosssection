@@ -27,9 +27,11 @@ export type Op =
   // shared add-hole pipeline).
   | { kind: "move-hole-center"; index: number; target: Vec2 }
   | { kind: "move-hole-radius"; index: number; r: number }
-  // Whole-prim translate. Delta is cumulative from the gesture's start —
-  // not per-frame — so each frame's apply() against dragStartShape is
-  // trivially associative.
+  // Translate a circle prim (the disk or a circle hole) as a unit. Polygon
+  // outers and polygon holes don't translate; vertex-level edits are the
+  // only mutation surface for them. Delta is cumulative from the gesture's
+  // start — not per-frame — so each frame's apply() against dragStartShape
+  // is trivially associative.
   | { kind: "translate-prim"; sel: Selection; delta: Vec2 };
 
 export type OpKind = Op["kind"];

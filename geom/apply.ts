@@ -389,11 +389,12 @@ function reAddCircleHole(
 
 // ----- translate-prim -----
 //
-// Move the named prim by `delta`. Other prims stay put. Delta is cumulative
-// from the gesture's start: callers feed apply(dragStartShape, ...) each
-// frame with the running cursor delta, never chaining one frame's result
-// into the next. That way the gesture is trivially associative and we
-// don't accumulate floating-point error along a long drag.
+// Translate a circle prim (the disk or a circle hole) by `delta`. Polygon
+// outers and polygon holes don't translate — the gesture isn't natural for
+// them, and individual vertex drags cover the use case. Delta is cumulative
+// from the gesture's start; callers feed apply(dragStartShape, ...) each
+// frame with the running cursor delta. That way the gesture is trivially
+// associative and floating-point error doesn't accumulate along a long drag.
 
 function translatePrim(base: AuthoringShape, sel: Selection, delta: Vec2): ApplyResult {
   if (sel.kind === "disk") {
@@ -407,38 +408,22 @@ function translatePrim(base: AuthoringShape, sel: Selection, delta: Vec2): Apply
     return finalize(candidate, sel, null);
   }
   if (sel.kind === "outer") {
-    if (base.kind !== "polygon") return invalid("translate-prim outer: base is not a polygon");
-    if (sel.index < 0 || sel.index >= base.outers.length) {
-      return invalid(`translate-prim outer: index ${sel.index} out of range`);
-    }
-    const newOuters = base.outers.map((o, i) =>
-      i === sel.index ? o.map((p) => ({ x: p.x + delta.x, y: p.y + delta.y })) : cloneOutline(o));
-    const candidate: AuthoringShape = { kind: "polygon", outers: newOuters, holes: [...base.holes] };
-    return finalize(candidate, sel, null);
+    return invalid("translate-prim: polygon outers are not translatable");
   }
   // sel.kind === "hole"
   if (sel.index < 0 || sel.index >= base.holes.length) {
     return invalid(`translate-prim hole: index ${sel.index} out of range`);
   }
   const h = base.holes[sel.index]!;
-  if (h.kind === "circle") {
-    // Translating a circle hole goes through the re-add pipeline so
-    // crossing the outer triggers polygonization (warning) just like a
-    // direct drag of the center handle would.
-    return reAddCircleHole(base, sel.index, () => ({
-      cx: h.cx + delta.x, cy: h.cy + delta.y, r: h.r,
-    }));
+  if (h.kind !== "circle") {
+    return invalid("translate-prim: polygon holes are not translatable");
   }
-  // Polygon hole: translate every vertex.
-  const newHole: Hole = {
-    kind: "polygon",
-    outline: h.outline.map((p) => ({ x: p.x + delta.x, y: p.y + delta.y })),
-  };
-  const newHoles = base.holes.map((hh, i) => (i === sel.index ? newHole : hh));
-  const candidate: AuthoringShape = base.kind === "disk"
-    ? { ...base, holes: newHoles }
-    : { kind: "polygon", outers: base.outers.map(cloneOutline), holes: newHoles };
-  return finalize(candidate, sel, null);
+  // Translating a circle hole goes through the re-add pipeline so crossing
+  // the outer triggers polygonization (warning) just like a direct drag of
+  // the center handle would.
+  return reAddCircleHole(base, sel.index, () => ({
+    cx: h.cx + delta.x, cy: h.cy + delta.y, r: h.r,
+  }));
 }
 
 // ----- helpers -----
