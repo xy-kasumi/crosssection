@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>crosssection</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <main>
+      <div class="canvas-wrap">
+        <canvas id="cv" width="480" height="480"></canvas>
+      </div>
+
+      <aside class="panel">
+        <section class="presets">
+          <button data-preset="rod" class="preset-btn active">Rod</button>
+          <button data-preset="square" class="preset-btn">Square</button>
+        </section>
+
+        <section class="controls">
+          <label>
+            <span class="param-name" id="param-name">D</span>
+            <span class="param-val" id="param-val">10.0 mm</span>
+          </label>
+          <input type="range" id="d-slider" min="1" max="50" step="0.5" value="10" />
+        </section>
+
+        <section class="readouts">
+          <div class="readout">
+            <div class="readout-label">I<sub>x</sub></div>
+            <div class="readout-val" id="ix">—</div>
+            <div class="readout-unit">mm⁴</div>
+          </div>
+          <div class="readout">
+            <div class="readout-label">I<sub>y</sub></div>
+            <div class="readout-val" id="iy">—</div>
+            <div class="readout-unit">mm⁴</div>
+          </div>
+          <div class="readout">
+            <div class="readout-label">J</div>
+            <div class="readout-val" id="j">—</div>
+            <div class="readout-unit">mm⁴</div>
+          </div>
+        </section>
+
+        <section class="status">
+          <div id="status">starting Python…</div>
+        </section>
+      </aside>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
