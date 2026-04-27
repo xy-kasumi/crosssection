@@ -1,0 +1,23 @@
+# Node / TypeScript
+node_modules/
+dist/
+*.log
+*.tsbuildinfo
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+
+# Python venv used to drive `pyodide build` (host-side toolchain, not project source)
+.venv-pyodide-build/
+
+# Pyodide build artifacts (the source recipe stays; build outputs don't)
+pyodide-build/cytriangle/build/
+pyodide-build/cytriangle/dist/
+
+# Note: the vendored wheels under wheels/ ARE the artifact and are checked in.
+
+# Local Pyodide wheel cache populated by Node's pyodide loader at runtime
+node_modules/pyodide/*.whl
+node_modules/pyodide/*.zip
