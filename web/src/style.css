@@ -1,75 +1,124 @@
+/* Visual tokens. Three scales (spacing/radius/type) and a small color
+   palette, all named by role. Per-rule changes pick the role; new sizes
+   should justify a new role rather than a one-off pixel value. */
 :root {
   color-scheme: light dark;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+
+  /* spacing — used for both gap and padding */
+  --gap-tight:    4px;
+  --gap-snug:     8px;
+  --gap-cozy:    12px;
+  --gap-loose:   16px;
+  --gap-section: 20px;
+  --pad-page:    24px;
+
+  /* radii */
+  --radius-control: 4px;   /* small interactive: buttons, inputs, tags, list items */
+  --radius-card:    6px;   /* cards: readouts, prim-list, size-input overlay, start buttons */
+  --radius-surface: 8px;   /* large surfaces: canvas frame, canvas toolbar, boot card */
+
+  /* type — by role, not size */
+  --fs-numeric: 22px;      /* the big Ix/Iy/J readout values */
+  --fs-label:   16px;      /* Ix/Iy/J labels next to them */
+  --fs-body:    14px;      /* default UI text, start-from buttons, boot message */
+  --fs-ui:      13px;      /* interactive controls: tool buttons, inputs, list rows */
+  --fs-caption: 12px;      /* small uppercase section headers, status, readout unit */
+  --fs-meta:    11px;      /* hints, tags, kbd, tick-mark-adjacent secondary info */
+
+  /* color — by role */
+  --border:           #e0e0e0;
+  --border-strong:    #ccc;
+  --surface:          #fff;
+  --surface-muted:    #fafafa;
+  --surface-overlay:  rgba(255,255,255,0.92);
+  --hover-tint:       rgba(127,127,127,0.08);
+  --accent:           rgb(80,130,230);
+  --accent-tint:      rgba(80,130,230,0.18);
+  --accent-tint-soft: rgba(80,130,230,0.15);
+  --danger:           #c33;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --border:          #333;
+    --border-strong:   #444;
+    --surface:         #1a1a1a;
+    --surface-muted:   #1a1a1a;
+    --surface-overlay: rgba(26,26,26,0.92);
+  }
 }
 
-/* Boot overlay: covers the whole viewport while the Pyodide worker boots,
-   and stays up if boot fails. The editor below is rendered but inert until
-   the overlay is dismissed, so the user can't waste effort editing on a
-   tool that won't compute. */
+/* ---------- shared primitives ---------- */
+
+.card {
+  /* Bordered surface used by readouts, prim-list, etc. */
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+}
+.uppercase-header {
+  /* Small uppercase headers (section-toggle, prim-list h3). */
+  font-size: var(--fs-caption);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+body { margin: 0; padding: 0; min-height: 100vh; }
+
+main {
+  display: grid;
+  grid-template-columns: 220px minmax(320px, 1fr) 240px;
+  gap: var(--pad-page);
+  padding: var(--pad-page);
+  align-items: stretch;
+}
+
+/* ---------- boot overlay ---------- */
+/* Hidden by default; shown only when the FEM worker fails or times out. */
+
 .boot-overlay {
   position: fixed;
   inset: 0;
   display: grid;
   place-items: center;
-  background: rgba(255, 255, 255, 0.78);
+  background: rgba(255,255,255,0.78);
   backdrop-filter: blur(2px);
   z-index: 1000;
   transition: opacity 0.2s ease;
 }
 @media (prefers-color-scheme: dark) {
-  .boot-overlay { background: rgba(20, 20, 20, 0.78); }
+  .boot-overlay { background: rgba(20,20,20,0.78); }
 }
 .boot-overlay.hidden { opacity: 0; pointer-events: none; }
 .boot-card {
   max-width: 380px;
-  padding: 24px 28px;
-  background: var(--bg, #fff);
-  border: 1px solid var(--border, #e0e0e0);
-  border-radius: 10px;
+  padding: var(--pad-page);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-surface);
   text-align: center;
-  font-size: 13px;
+  font-size: var(--fs-ui);
 }
-@media (prefers-color-scheme: dark) {
-  .boot-card { background: #1a1a1a; border-color: #333; }
-}
-.boot-spinner {
-  width: 28px;
-  height: 28px;
-  margin: 0 auto 12px;
-  border: 3px solid rgba(127,127,127,0.25);
-  border-top-color: rgb(80, 130, 230);
-  border-radius: 50%;
-  animation: spin 0.9s linear infinite;
-}
-@keyframes spin { to { transform: rotate(360deg); } }
-.boot-msg { font-size: 14px; font-weight: 500; }
-.boot-phase {
-  margin-top: 4px;
-  font-size: 11px;
-  opacity: 0.6;
-  font-variant-numeric: tabular-nums;
-}
-.boot-card.error .boot-spinner { display: none; }
-.boot-card.error .boot-msg { color: #c33; }
-.boot-card.error p { margin: 8px 0; line-height: 1.5; opacity: 0.85; text-align: left; }
+.boot-msg { font-size: var(--fs-body); font-weight: 500; }
+.boot-card.error .boot-msg { color: var(--danger); }
+.boot-card.error p { margin: var(--gap-snug) 0; line-height: 1.5; opacity: 0.85; text-align: left; }
 .boot-card.error button {
-  margin-top: 12px;
-  padding: 8px 16px;
+  margin-top: var(--gap-cozy);
+  padding: var(--gap-snug) var(--gap-loose);
   font: inherit;
-  font-size: 13px;
-  border: 1px solid var(--border, #ccc);
+  font-size: var(--fs-ui);
+  border: 1px solid var(--border-strong);
   background: transparent;
-  border-radius: 6px;
+  border-radius: var(--radius-card);
   cursor: pointer;
 }
-.boot-card.error button:hover { background: rgba(127,127,127,0.08); }
-.boot-card.error details { margin-top: 12px; text-align: left; font-size: 11px; }
+.boot-card.error button:hover { background: var(--hover-tint); }
+.boot-card.error details { margin-top: var(--gap-cozy); text-align: left; font-size: var(--fs-meta); }
 .boot-card.error details pre {
   margin: 6px 0 0;
   padding: 6px 8px;
-  background: rgba(127,127,127,0.08);
-  border-radius: 4px;
+  background: var(--hover-tint);
+  border-radius: var(--radius-control);
   white-space: pre-wrap;
   word-break: break-word;
   font-size: 10px;
@@ -77,26 +126,13 @@
   overflow: auto;
 }
 
-body {
-  margin: 0;
-  padding: 0;
-  min-height: 100vh;
-}
-
-main {
-  display: grid;
-  grid-template-columns: 220px minmax(320px, 1fr) 240px;
-  gap: 24px;
-  padding: 24px;
-  align-items: stretch;
-}
+/* ---------- left column: start-from + readouts ---------- */
 
 .left-col {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  /* Aside has UA margin in some browsers; reset. */
-  margin: 0;
+  gap: var(--gap-loose);
+  margin: 0; /* aside has UA margin in some browsers */
 }
 
 .section-toggle {
@@ -104,11 +140,11 @@ main {
   align-items: center;
   justify-content: space-between;
   width: 100%;
-  padding: 4px 2px 8px;
+  padding: var(--gap-tight) 2px var(--gap-snug);
   background: transparent;
   border: 0;
   font: inherit;
-  font-size: 12px;
+  font-size: var(--fs-caption);
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -119,7 +155,7 @@ main {
 }
 .section-toggle:hover { opacity: 1; }
 .section-toggle .chevron {
-  font-size: 10px;
+  font-size: var(--fs-meta);
   transition: transform 0.2s ease;
   opacity: 0.7;
 }
@@ -143,32 +179,71 @@ main {
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 6px;
-}
-
-.results-section {
-  margin-top: auto;        /* push to bottom of left column */
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+  gap: var(--gap-snug);
 }
 .start-btn {
   width: 100%;
   text-align: left;
-  padding: 10px 12px;
-  border: 1px solid var(--border, #ccc);
+  padding: var(--gap-snug) var(--gap-cozy);
+  border: 1px solid var(--border-strong);
   background: transparent;
-  border-radius: 6px;
+  border-radius: var(--radius-card);
   cursor: pointer;
   font: inherit;
-  font-size: 14px;
+  font-size: var(--fs-body);
 }
-.start-btn:hover { background: rgba(127,127,127,0.08); }
+.start-btn:hover { background: var(--hover-tint); }
+
+.results-section {
+  margin-top: auto;        /* push readouts to the bottom of the left column */
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-cozy);
+}
+
+.readouts {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--gap-snug);
+}
+.readout {
+  display: grid;
+  grid-template-columns: 30px 1fr 50px;
+  align-items: baseline;
+  gap: var(--gap-cozy);
+  padding: var(--gap-cozy);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+}
+.readout-label { font-size: var(--fs-label); font-weight: 600; }
+.readout-val {
+  font-size: var(--fs-numeric);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  transition: opacity 0.2s;
+}
+.readout-val.computing { opacity: 0.4; }
+.readout-val.invalid   { color: var(--danger); opacity: 0.85; }
+.readout-unit { font-size: var(--fs-caption); opacity: 0.6; }
+
+.status {
+  font-size: var(--fs-caption);
+  opacity: 0.7;
+  font-variant-numeric: tabular-nums;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-tight);
+  min-height: 1em;
+}
+.status .hint { font-size: var(--fs-meta); opacity: 0.7; line-height: 1.4; }
+.status.invalid #status { color: var(--danger); opacity: 1; }
+
+/* ---------- canvas column: toolbar + canvas + size-input overlay ---------- */
 
 .canvas-col {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--gap-snug);
   align-items: center;
   justify-self: center;
   width: 100%;
@@ -178,47 +253,46 @@ main {
 .canvas-toolbar {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--gap-snug);
   width: 100%;
-  padding: 6px 8px;
-  background: var(--bg, #fafafa);
-  border: 1px solid var(--border, #e0e0e0);
-  border-radius: 8px;
-  font-size: 13px;
-}
-@media (prefers-color-scheme: dark) {
-  .canvas-toolbar { background: #1a1a1a; border-color: #333; }
+  padding: var(--gap-snug);
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-surface);
+  font-size: var(--fs-ui);
 }
 .tool-btn {
-  padding: 6px 10px;
+  padding: 6px var(--gap-cozy);
   font: inherit;
-  font-size: 13px;
-  border: 1px solid var(--border, #ccc);
+  font-size: var(--fs-ui);
+  border: 1px solid var(--border-strong);
   background: transparent;
-  border-radius: 4px;
+  border-radius: var(--radius-control);
   cursor: pointer;
 }
-.tool-btn:hover { background: rgba(127,127,127,0.08); }
-.tool-btn.active { background: rgba(80,130,230,0.18); border-color: rgb(80,130,230); }
-.toolbar-sep { flex: 1; }
+.tool-btn:hover         { background: var(--hover-tint); }
+.tool-btn.active        { background: var(--accent-tint); border-color: var(--accent); }
+.toolbar-sep            { flex: 1; }
+
 .snap-toggle {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--gap-tight);
   cursor: pointer;
   user-select: none;
 }
 .snap-toggle input { margin: 0; cursor: pointer; }
+
 .kbd-hint {
   font-family: ui-monospace, SFMono-Regular, monospace;
-  font-size: 10px;
+  font-size: var(--fs-meta);
   padding: 1px 5px;
-  border: 1px solid var(--border, #ccc);
-  border-radius: 3px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-control);
   opacity: 0.6;
 }
 .tool-hint {
-  font-size: 11px;
+  font-size: var(--fs-meta);
   opacity: 0.6;
   min-width: 0;
   overflow: hidden;
@@ -230,52 +304,15 @@ main {
   position: relative;
   display: grid;
   place-items: center;
-  background: var(--bg, #fafafa);
-  border: 1px solid var(--border, #e0e0e0);
-  border-radius: 8px;
-  padding: 16px;
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-surface);
+  padding: var(--gap-loose);
   aspect-ratio: 1 / 1;
   max-width: 560px;
   max-height: 560px;
   width: 100%;
 }
-
-.size-input-overlay {
-  position: absolute;
-  top: 12px;
-  left: 12px;
-  display: flex;
-  gap: 10px;
-  align-items: center;
-  background: rgba(255,255,255,0.92);
-  border: 1px solid var(--border, #e0e0e0);
-  border-radius: 6px;
-  padding: 6px 10px;
-  font-size: 13px;
-  z-index: 2;
-}
-.size-input-overlay[hidden] { display: none; }
-@media (prefers-color-scheme: dark) {
-  .size-input-overlay { background: rgba(26,26,26,0.92); border-color: #333; }
-}
-.size-input-overlay label { display: inline-flex; align-items: center; gap: 4px; }
-.size-input-overlay input {
-  width: 70px;
-  padding: 4px 6px;
-  font: inherit;
-  border: 1px solid var(--border, #ccc);
-  border-radius: 4px;
-}
-.size-input-overlay .hint {
-  font-size: 11px;
-  opacity: 0.55;
-  margin-left: 4px;
-}
-
-@media (prefers-color-scheme: dark) {
-  .canvas-wrap { background: #1a1a1a; border-color: #333; }
-}
-
 canvas {
   width: 100%;
   height: 100%;
@@ -285,70 +322,77 @@ canvas {
   user-select: none;
 }
 
-/* Zero-state landing: hide the editing toolbar and the right-side debug
-   panel; keep the Start from list and the Ix/Iy/J readouts visible (the
-   readouts carousel in lockstep with the demo, so they're a teaser, not
-   noise). visibility:hidden (not display:none) so the layout doesn't
-   reflow the moment the user picks a preset. */
-body.zero-state .canvas-toolbar,
-body.zero-state .panel { visibility: hidden; }
-body.zero-state canvas { cursor: default; }
-
-.panel {
+.size-input-overlay {
+  position: absolute;
+  top: var(--gap-cozy);
+  left: var(--gap-cozy);
   display: flex;
-  flex-direction: column;
-  gap: 20px;
+  gap: var(--gap-snug);
+  align-items: center;
+  background: var(--surface-overlay);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  padding: 6px var(--gap-snug);
+  font-size: var(--fs-ui);
+  z-index: 2;
 }
+.size-input-overlay[hidden] { display: none; }
+.size-input-overlay label   { display: inline-flex; align-items: center; gap: var(--gap-tight); }
+.size-input-overlay input {
+  width: 70px;
+  padding: var(--gap-tight) 6px;
+  font: inherit;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-control);
+}
+.size-input-overlay .hint { font-size: var(--fs-meta); opacity: 0.55; margin-left: var(--gap-tight); }
+
+/* ---------- right column: debug panel ---------- */
+
+.panel { display: flex; flex-direction: column; gap: var(--gap-section); }
 
 .prim-list {
-  border: 1px solid var(--border, #e0e0e0);
-  border-radius: 6px;
-  padding: 8px 12px;
-}
-@media (prefers-color-scheme: dark) {
-  .prim-list { border-color: #333; }
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  padding: var(--gap-snug) var(--gap-cozy);
 }
 .prim-list h3 {
   margin: 0 0 6px 0;
-  font-size: 12px;
+  font-size: var(--fs-caption);
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
   opacity: 0.6;
 }
 .prim-list h3 .debug-tag {
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 500;
   letter-spacing: 0.06em;
-  margin-left: 4px;
+  margin-left: var(--gap-tight);
   padding: 1px 5px;
   border: 1px solid currentColor;
-  border-radius: 3px;
+  border-radius: var(--radius-control);
   opacity: 0.7;
   vertical-align: 1px;
 }
 .prim-list ul {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+  list-style: none; margin: 0; padding: 0;
+  display: flex; flex-direction: column; gap: 2px;
 }
 .prim-list li {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 4px 6px;
-  border-radius: 4px;
-  font-size: 13px;
+  gap: var(--gap-snug);
+  padding: var(--gap-tight) 6px;
+  border-radius: var(--radius-control);
+  font-size: var(--fs-ui);
   cursor: pointer;
 }
-.prim-list li:hover { background: rgba(127,127,127,0.08); }
-.prim-list li.selected { background: rgba(80, 130, 230, 0.15); }
+.prim-list li:hover     { background: var(--hover-tint); }
+.prim-list li.selected  { background: var(--accent-tint-soft); }
 .prim-list li .prim-tag {
   font-family: ui-monospace, SFMono-Regular, monospace;
-  font-size: 11px;
+  font-size: var(--fs-meta);
   opacity: 0.6;
   min-width: 32px;
 }
@@ -357,59 +401,18 @@ body.zero-state canvas { cursor: default; }
   border: none;
   background: transparent;
   cursor: pointer;
-  font-size: 14px;
+  font-size: var(--fs-body);
   opacity: 0.4;
-  padding: 0 4px;
+  padding: 0 var(--gap-tight);
   font: inherit;
 }
-.prim-list li .prim-del:hover { opacity: 1; color: #d33; }
+.prim-list li .prim-del:hover { opacity: 1; color: var(--danger); }
 
-.readouts {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 6px;
-}
-.readout {
-  display: grid;
-  grid-template-columns: 30px 1fr 50px;
-  align-items: baseline;
-  gap: 12px;
-  padding: 10px 12px;
-  border: 1px solid var(--border, #e0e0e0);
-  border-radius: 6px;
-}
-@media (prefers-color-scheme: dark) {
-  .readout { border-color: #333; }
-}
-.readout-label {
-  font-size: 16px;
-  font-weight: 600;
-}
-.readout-val {
-  font-size: 22px;
-  font-variant-numeric: tabular-nums;
-  text-align: right;
-  transition: opacity 0.2s;
-}
-.readout-val.computing { opacity: 0.4; }
-.readout-val.invalid { color: #c33; opacity: 0.85; }
-.readout-unit {
-  font-size: 12px;
-  opacity: 0.6;
-}
-
-.status {
-  font-size: 12px;
-  opacity: 0.7;
-  font-variant-numeric: tabular-nums;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-height: 1em;
-}
-.status .hint {
-  font-size: 11px;
-  opacity: 0.7;
-  line-height: 1.4;
-}
-.status.invalid #status { color: #c33; opacity: 1; }
+/* ---------- zero-state landing ---------- */
+/* Hide the editing toolbar and the debug panel; keep Start from + readouts
+   visible (the readouts carousel in lockstep with the demo, so they're a
+   teaser, not noise). visibility:hidden so layout doesn't reflow when the
+   user picks a preset. */
+body.zero-state .canvas-toolbar,
+body.zero-state .panel       { visibility: hidden; }
+body.zero-state canvas       { cursor: default; }

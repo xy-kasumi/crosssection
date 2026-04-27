@@ -1,0 +1,65 @@
+// Owns the Ix/Iy/J readout boxes plus the small status line below them.
+// All four states are mutually exclusive: blank, computing (last value
+// faded), computed (fresh value), invalid (error red). Callers don't poke
+// the DOM directly — they pick a state.
+
+import { twoSigFigs } from "../format.ts";
+
+export class Readouts {
+  private readonly ix: HTMLElement;
+  private readonly iy: HTMLElement;
+  private readonly j: HTMLElement;
+  private readonly status: HTMLElement;
+
+  constructor() {
+    this.ix = document.getElementById("ix")!;
+    this.iy = document.getElementById("iy")!;
+    this.j  = document.getElementById("j")!;
+    this.status = document.getElementById("status")!;
+  }
+
+  setComputed(ix: number, iy: number, j: number, statusText: string): void {
+    this.ix.textContent = twoSigFigs(ix);
+    this.iy.textContent = twoSigFigs(iy);
+    this.j.textContent  = twoSigFigs(j);
+    this.setMode("computed");
+    this.status.textContent = statusText;
+  }
+
+  setComputing(on: boolean): void {
+    for (const el of this.allValues()) {
+      el.classList.toggle("computing", on);
+      el.classList.remove("invalid");
+    }
+  }
+
+  setInvalid(message: string): void {
+    for (const el of this.allValues()) {
+      el.textContent = "—";
+      el.classList.add("invalid");
+      el.classList.remove("computing");
+    }
+    this.status.textContent = message;
+  }
+
+  // Display arbitrary precomputed values without tagging them as FEM-derived
+  // (used by the zero-state demo, which carries closed-form numbers).
+  setDemo(ix: number, iy: number, j: number): void {
+    this.ix.textContent = twoSigFigs(ix);
+    this.iy.textContent = twoSigFigs(iy);
+    this.j.textContent  = twoSigFigs(j);
+    this.setMode("computed");
+    this.status.textContent = "";
+  }
+
+  private *allValues(): Generator<HTMLElement> {
+    yield this.ix; yield this.iy; yield this.j;
+  }
+
+  private setMode(mode: "computed" | "computing" | "invalid"): void {
+    for (const el of this.allValues()) {
+      el.classList.toggle("computing", mode === "computing");
+      el.classList.toggle("invalid",   mode === "invalid");
+    }
+  }
+}
