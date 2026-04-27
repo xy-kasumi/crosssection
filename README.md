@@ -15,19 +15,28 @@ solver/           Self-contained FEM package — TS facade + Python + vendored w
                   `import { SolverClient } from "@solver/client.ts"`.
                     client.ts            PUBLIC: spawns the Pyodide worker, postMessage RPC
                     worker.ts            internal: the Pyodide worker (boots from CDN)
-                    pyodide-host.ts      internal: shared by Node-side compute.ts and worker.ts
+                    pyodide-host.ts      internal: browser-importable bootstrap
+                    node-host.ts         internal: Node-only bootForNode (filesystem reads)
                     compute.ts           Node-side entry (used by solver/tests)
                     shape.ts             SolverShape, WireShape, toWire
                     presets.ts           FEM-side primitives (used by solver/tests)
                     python/              solve.py + closed_form.py loaded into Pyodide
                     wheels/              Vendored built wheels (committed binaries)
                     tests/               CLI battery + closed-form formulas + case definitions
+geom/             Pure, immutable geometry kernel. No DOM, no Pyodide — runs unchanged
+                  under plain Node, which is the whole point.
+                    shape.ts             AuthoringShape + compose() + authoringBBox
+                    op.ts                Op union (granular: move-vert, translate-prim, ...)
+                    apply.ts             apply(shape, op) → ok | warning | error | invalid
+                    presets.ts           defaultDisk / rodOf / rectShapeOf / extrusionOf
+                    internal.ts          polygon-clipping helpers (private)
+                    index.ts             public surface
+                    tests/               node --test unit battery
 pyodide-build/    Recipe + script for rebuilding the cytriangle wheel.
 web/              Browser UI. Self-contained subdir with its own package.json.
                   Deletable without breaking anything in the rest of the project.
                     src/main.ts          composition root (wires panels)
-                    src/editor.ts        shape edit engine (drag, hit-test, tools)
-                    src/ops.ts           op model: previewOp(base, op) → ok/warning/error
+                    src/editor.ts        shape edit engine — issues Ops; never mutates shape
                     src/view-animator.ts halfSpan tween + zero-state RAF
                     src/canvas/          paint pipeline (grid, shape, handles, ...)
                     src/ui/              panels: start-pane, toolbar, canvas-status,
@@ -36,12 +45,27 @@ scripts/          Diagnostic spike scripts (probe-*, m0-*).
 test.sh           Top-level integ entry: runs each module's test battery in order.
 ```
 
+### Module dependencies
+
+```
+   ┌──────┐     ┌──────┐
+   │  web │────▶│ geom │       web → {solver, geom} at runtime.
+   │      │──┬─▶│      │       geom → solver type-only (SolverShape).
+   └──────┘  │  └───┬──┘       solver: self-contained.
+             │      │ (type-only: SolverShape)
+             ▼      ▼
+           ┌────────────┐
+           │   solver   │
+           └────────────┘
+```
+
 The root `package.json` declares **no bundler** — it depends only on `pyodide` (Node target), `tsx`, and `typescript`. All web tooling lives under `web/`. If Vite goes out of fashion, only `web/` changes.
 
 ## Architecture notes
 
 - Compute runs in Pyodide using the [`sectionproperties`](https://github.com/robbievanleeuwen/section-properties) library by Robbie van Leeuwen. The dependency [`cytriangle`](https://github.com/m-clare/cytriangle) (a Cython wrapper around Shewchuk's [Triangle](https://www.cs.cmu.edu/~quake/triangle.html)) has no Pyodide wheel on PyPI; we build one ourselves and commit it under `solver/wheels/`. The build (`pyodide-build/cytriangle/build.sh`) applies two mechanical patches: relax `numpy>=2.3.3` → `>=2.0`, and retag the wheel from `pyemscripten_2024_0_wasm32` → `emscripten_3_1_58_wasm32`. Both can go away when the npm `pyodide` package upgrades past 0.28.
 - Internal shape representation in solver/ is polygon-only (`SolverShape = Polygon[]`). Curves enter as fine polygons; a single uniform input format keeps curvature concerns confined to the mesher.
+- The web editor talks to a separate, pure geometry kernel in `geom/`. Every shape edit goes through `apply(shape, op) → ok | warning | error | invalid` — `editor.ts` never mutates `this.shape` directly. The kernel is fully Node-testable (`geom/tests/`); the browser is a presentation layer over it. See [`docs/editor-model.md`](docs/editor-model.md) for the op vocabulary and invariants.
 - Tests run under Pyodide-on-Node (`./test.sh` or `npm test`), not in a browser — same Python, same wheels, same numerics.
 - Every expected value in `solver/tests/cases.ts` cites an external source (closed form, textbook, standard). Self-computed regression baselines are not allowed: if the algorithm is wrong, a self-baseline is wrong, the test passes, wrong numbers ship.
 - The Pyodide worker (`solver/worker.ts`) boots at module top-level. Lazy-on-first-message deadlocks against a main thread waiting for `ready`. Boot is non-blocking from the user's perspective: the editor is interactive immediately and a failure overlay only appears if boot times out (45 s) or the worker errors. Web spawns the worker indirectly — it only imports `SolverClient`; worker URL resolution and the wheel/python file URLs are solver-internal, resolved via `import.meta.url`.

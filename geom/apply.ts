@@ -66,8 +66,6 @@ export interface OpInvalid {
 }
 
 export type ApplyResult = OpOk | OpWarning | OpError | OpInvalid;
-// Legacy alias kept while web/src/ops.ts shim is in place; Phase E removes.
-export type OpResult = ApplyResult;
 
 // The one warning message the editor uses today. Centralized so it stays
 // consistent across ops and easy to tweak. User-facing language: name the

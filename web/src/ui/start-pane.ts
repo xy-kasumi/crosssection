@@ -8,7 +8,7 @@
 // Typing in the overlay updates the shape immediately; the grid refit is
 // debounced so it doesn't chase rapid keystrokes ("32" → "3" → "33").
 
-import { extrusionOf, rectShapeOf, rodOf } from "../authoring.ts";
+import { extrusionOf, rectShapeOf, rodOf } from "@geom/index.ts";
 import type { Editor } from "../editor.ts";
 
 type Preset = "rod" | "rect" | "extrusion";

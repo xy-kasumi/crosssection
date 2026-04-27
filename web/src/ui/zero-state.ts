@@ -10,7 +10,7 @@
 import {
   compose, extrusionOf, rectShapeOf, rodOf,
   type AuthoringShape,
-} from "../authoring.ts";
+} from "@geom/index.ts";
 import type { SolverShape } from "@solver/shape.ts";
 import type { Editor } from "../editor.ts";
 import type { Readouts } from "./readouts.ts";

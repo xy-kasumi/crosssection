@@ -6,14 +6,14 @@
 // themselves, they call `worldToScreen` from here.
 //
 // Three coordinate systems exist:
-//   1. World (mm)        — what authoring.ts speaks (Vec2 = {x, y}, y-up)
+//   1. World (mm)        — what @geom speaks (Vec2 = {x, y}, y-up)
 //   2. CSS pixels        — what the user clicks ({sx, sy}, y-down)
 //   3. Backing-store px  — cssPx × devicePixelRatio. Only `makeView` (which
 //                          sizes canvas.width/height) and the per-frame
 //                          `ctx.setTransform(dpr,...)` know about this.
 
 import type { SolverShape } from "@solver/shape.ts";
-import type { AuthoringShape, Selection, Vec2 } from "../authoring.ts";
+import type { AuthoringShape, Selection, Vec2 } from "@geom/index.ts";
 
 import { drawGrid } from "./grid.ts";
 import { drawShape } from "./shape.ts";

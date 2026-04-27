@@ -3,7 +3,7 @@
 // segment. Hit-testing uses CSS px so the click radius is consistent
 // regardless of zoom level.
 
-import type { Outline, Selection } from "../authoring.ts";
+import type { Outline, Selection } from "@geom/index.ts";
 import { worldToScreen, type Handle, type View } from "./index.ts";
 
 const HANDLE_RADIUS_PX = 5;

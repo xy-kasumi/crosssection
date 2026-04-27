@@ -2,7 +2,7 @@
 // zero-state), the Editor, and the SolverClient. No DOM lookups, no UI
 // logic — those live in their respective modules.
 
-import { compose, defaultDisk } from "./authoring.ts";
+import { compose, defaultDisk } from "@geom/index.ts";
 import { Editor } from "./editor.ts";
 import { SolverClient } from "@solver/client.ts";
 import { Readouts } from "./ui/readouts.ts";

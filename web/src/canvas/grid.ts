@@ -2,7 +2,7 @@
 // labels. Engineering halfSpan ladder ({1,2,5} × 10^k) means the user sees
 // "5" / "10" / "20" rather than "13.7". Receives a View; emits CSS pixels.
 
-import { authoringBBox, type AuthoringShape } from "../authoring.ts";
+import { authoringBBox, type AuthoringShape } from "@geom/index.ts";
 import type { View } from "./index.ts";
 
 const FIT_MARGIN = 1.15; // halfSpan must be >= FIT_MARGIN * max abs world coord

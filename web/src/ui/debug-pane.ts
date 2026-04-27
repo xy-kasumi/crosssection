@@ -3,7 +3,7 @@
 // shape, with click-to-select and ✕-to-delete. Explicitly debug, not
 // product UI: don't pour design effort here.
 
-import { rectOutline, type AuthoringShape, type Selection } from "../authoring.ts";
+import { rectOutline, type AuthoringShape, type Selection } from "@geom/index.ts";
 import type { Editor } from "../editor.ts";
 
 export class DebugPane {
