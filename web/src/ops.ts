@@ -186,10 +186,18 @@ function previewEraseRect(base: AuthoringShape, p1: Vec2, p2: Vec2): OpResult {
 //
 // Three cases:
 //   - clean: circle entirely inside outer, no overlap with any existing
-//            hole → commit as a circle-hole.
-//   - clipped or merged: circle crosses the outer or overlaps any existing
-//            hole → polygon-hole carries the merged region forward; the
-//            new hole loses circle-ness, warning emitted.
+//            hole → commit as a circle-hole. AuthoringShape kind is preserved
+//            (DiskShape stays DiskShape).
+//   - clipped or merged: circle crosses the outer OR overlaps an existing
+//            hole. The new circle would degenerate into an arc, which the
+//            authoring model can't represent. We polygonize: subtract the
+//            (hole ∩ outer) footprint plus any overlapped holes from the
+//            outer boundary, then decompose. If the bite touches the outer
+//            edge, the outer notches; if it doesn't, an emergent polygon
+//            hole appears. Either way the result is a PolygonShape so the
+//            authoring representation matches what compose() will produce.
+//            Warning emitted (the new hole and any overlapped circles lose
+//            their circle-ness identity).
 //   - rejected: zero radius, or entirely outside the shape.
 
 function previewAddHole(base: AuthoringShape, center: Vec2, edge: Vec2): OpResult {
@@ -218,7 +226,7 @@ function previewAddHole(base: AuthoringShape, center: Vec2, edge: Vec2): OpResul
     }
   }
 
-  // Clean placement: circle stays a circle.
+  // Clean placement: circle stays a circle, AuthoringShape kind preserved.
   if (!crossesOuter && overlappedIdxs.length === 0) {
     const newHole: Hole = { kind: "circle", cx: center.x, cy: center.y, r };
     const candidate: AuthoringShape = base.kind === "disk"
@@ -229,33 +237,43 @@ function previewAddHole(base: AuthoringShape, center: Vec2, edge: Vec2): OpResul
     return finalize(candidate, { kind: "hole", index: candidate.holes.length - 1 }, null);
   }
 
-  // Clipped/merged placement: produce a polygon-hole that's the union of
-  // (this hole ∩ outer) with each overlapped existing hole. Anything not
-  // overlapped passes through.
-  const partsToMerge: MultiPolygon[] = [inside];
-  for (const i of overlappedIdxs) {
-    const h = base.holes[i]!;
-    const ring = h.kind === "circle"
-      ? ringFromCircle(h.cx, h.cy, h.r)
-      : outlineToRing(h.outline);
-    partsToMerge.push([[ring]]);
-  }
-  const merged = polygonClipping.union(...partsToMerge);
-  const mergedHoles: Hole[] = merged.map((piece) => ({
-    kind: "polygon" as const, outline: ringToOutline(piece[0]!),
-  }));
+  // Clipped or merged: re-derive the filled region the same way erase-rect
+  // does, treating (hole ∩ outer) ∪ overlapped-holes as the bite. The result
+  // is always a PolygonShape — the disk identity is gone if it ever was.
+  const overlappedHolesMP = overlappedIdxs.length > 0
+    ? holesMultiPolygon(overlappedIdxs.map((i) => base.holes[i]!))
+    : [];
+  const biteMP = overlappedHolesMP.length > 0
+    ? polygonClipping.union(inside, overlappedHolesMP)
+    : inside;
   const survivingHoles = base.holes.filter((_, i) => !overlappedIdxs.includes(i));
+  const survivingHolesMP = holesMultiPolygon(survivingHoles);
+  const filled = survivingHolesMP.length > 0
+    ? polygonClipping.difference(outerMP, survivingHolesMP)
+    : outerMP;
+  const newFilled = polygonClipping.difference(filled, biteMP);
+  if (newFilled.length === 0) return err("hole would erase the shape entirely");
+  if (newFilled.length > 1)   return err("hole would disconnect the shape");
 
-  const candidate: AuthoringShape = base.kind === "disk"
-    ? { ...base, holes: [...survivingHoles, ...mergedHoles] }
-    : { kind: "polygon",
-        outers: base.outers.map(cloneOutline),
-        holes: [...survivingHoles, ...mergedHoles] };
-  return finalize(
-    candidate,
-    { kind: "hole", index: candidate.holes.length - 1 },
-    WARN_CIRCLE_LOST,
-  );
+  const piece = newFilled[0]!;
+  const newOuter = ringToOutline(piece[0]!);
+  // Inner rings of the new filled region are emergent polygon holes (e.g.
+  // a hole entirely inside the outer that didn't bite the boundary).
+  const emergentHoles: Hole[] = piece.slice(1).map((ring) => ({
+    kind: "polygon" as const, outline: ringToOutline(ring),
+  }));
+
+  const candidate: AuthoringShape = {
+    kind: "polygon",
+    outers: [newOuter],
+    holes: [...survivingHoles, ...emergentHoles],
+  };
+  // Prefer to select an emergent hole (the one the user just created); else
+  // the outer (if the bite went through the boundary).
+  const preselect: Selection = emergentHoles.length > 0
+    ? { kind: "hole", index: candidate.holes.length - 1 }
+    : { kind: "outer", index: 0 };
+  return finalize(candidate, preselect, WARN_CIRCLE_LOST);
 }
 
 // ----- move-hole -----

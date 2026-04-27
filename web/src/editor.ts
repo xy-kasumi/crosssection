@@ -6,7 +6,7 @@
 // It receives mouse events in CSS px (getBoundingClientRect), calls
 // screenToWorld at the boundary, and does all internal logic in world coords.
 
-import type { AuthoringShape, Outline, Selection, Vec2 } from "./authoring.ts";
+import { compose, type AuthoringShape, type Outline, type Selection, type Vec2 } from "./authoring.ts";
 import {
   draw, hitHandle, screenToWorld, targetHalfSpan,
   type Handle, type ToolKind, type ToolPreview, type View,
@@ -51,7 +51,21 @@ export class Editor {
 
   // Drag state. While set, refit() suppresses halfSpan changes — the user
   // shouldn't see the grid jumping mid-edit.
-  private drag: null | { handle: Handle; lastWorld: Vec2 } = null;
+  //
+  // Hole-circle drags do NOT mutate `this.shape`. They keep `holeTarget`
+  // updated as the user drags; the displayed shape each frame comes from
+  // previewOp(this.shape, move-hole, holeTarget) so any polygon conversion
+  // is the result of commit logic, not in-place mutation. On release we
+  // commit the candidate (or discard on error).
+  //
+  // All other drag kinds (vertex, disk, whole-prim) still mutate directly:
+  // they don't produce arc-degenerate states, and threading them through
+  // an op model has no UX benefit today.
+  private drag: null | {
+    handle: Handle;
+    lastWorld: Vec2;
+    holeTarget?: { cx: number; cy: number; r: number };
+  } = null;
 
   // Tool state. Mutually exclusive with drag — when a tool is active, the
   // canvas swallows clicks for tool placement (and ignores handles).
@@ -139,28 +153,54 @@ export class Editor {
   render(): void {
     if (this.animator.isZeroState()) return;
     let preview: ToolPreview | null = null;
+    let status: ToolStatus = { level: "valid", message: null };
+    // Default: render the live AuthoringShape and its already-composed FEM
+    // silhouette (kept current by main.ts on every onChange).
+    let displayShape: AuthoringShape = this.shape;
+    let displayComposed: CoreShape | null = this.composed;
+
     if (this.tool && this.cursorWorld) {
       const cursor = this.snapWorld(this.cursorWorld);
       // Pre-anchor (still picking the first corner) we have no op to
       // evaluate, so the ghost is shown as valid and the host shows the
       // default "click first corner" hint.
-      let toolStatus: ToolStatus = { level: "valid", message: null };
       if (this.tool.anchor) {
         const op = makeOp(this.tool.kind, this.tool.anchor, cursor);
-        toolStatus = statusFromResult(previewOp(this.shape, op));
+        status = statusFromResult(previewOp(this.shape, op));
       }
       preview = {
         kind: this.tool.kind, anchor: this.tool.anchor, cursor,
         snapping: this.snap,
-        valid: toolStatus.level !== "error",
+        valid: status.level !== "error",
       };
-      this.updateStatus(toolStatus);
-    } else if (!this.drag) {
-      // No tool, no drag → nothing to say. While a drag is in flight the
-      // drag handler owns the status and we leave it alone.
-      this.updateStatus({ level: "valid", message: null });
+    } else {
+      // Hole-circle drag: the displayed shape is the candidate from
+      // previewOp(move-hole, holeTarget). On error, fall back to the live
+      // (untouched) shape — the user still sees the original prim while
+      // their cursor is in invalid territory. The drag's circle ghost (op
+      // cursor) shows where they're aiming.
+      const r = this.moveHoleResult();
+      if (r) {
+        status = statusFromResult(r);
+        if (r.kind === "ok" || r.kind === "warning") {
+          displayShape = r.shape;
+          const c = compose(displayShape);
+          displayComposed = c.ok ? c.shape : null;
+        }
+        if (this.drag?.holeTarget) {
+          const t = this.drag.holeTarget;
+          preview = {
+            kind: "add-hole",
+            anchor: { x: t.cx, y: t.cy },
+            cursor: { x: t.cx + t.r, y: t.cy },
+            snapping: this.snap,
+            valid: r.kind !== "error",
+          };
+        }
+      }
     }
-    this.handles = draw(this.canvas, this.view, this.shape, this.composed, this.selection, preview);
+    this.updateStatus(status);
+    this.handles = draw(this.canvas, this.view, displayShape, displayComposed, this.selection, preview);
   }
 
   private updateStatus(s: ToolStatus): void {
@@ -248,7 +288,19 @@ export class Editor {
         }
         return;
       }
-      this.drag = { handle: hit, lastWorld: this.snapWorld(screenToWorld(this.view, sx, sy)) };
+      let holeTarget: { cx: number; cy: number; r: number } | undefined;
+      if ((hit.kind === "holeCenter" || hit.kind === "holeRadius")
+          && hit.selection.kind === "hole") {
+        const h = this.shape.holes[hit.selection.index];
+        if (h && h.kind === "circle") {
+          holeTarget = { cx: h.cx, cy: h.cy, r: h.r };
+        }
+      }
+      this.drag = {
+        handle: hit,
+        lastWorld: this.snapWorld(screenToWorld(this.view, sx, sy)),
+        holeTarget,
+      };
       return;
     }
     // 2. Hit-test prim interior. If interior of an unselected prim, select
@@ -287,24 +339,33 @@ export class Editor {
     const dx = w.x - this.drag.lastWorld.x;
     const dy = w.y - this.drag.lastWorld.y;
     if (dx === 0 && dy === 0) return; // cursor moved within a snap cell
-    // applyDrag returns false if the proposed step is rejected (e.g. circle
-    // hole would escape the outer). In that case keep lastWorld pinned so
-    // the next step is computed against the actual unmoved geometry.
-    if (this.applyDrag(this.drag.handle, w, dx, dy)) {
-      this.drag.lastWorld = w;
-      this.cb.onChange();
-    }
+    this.drag.lastWorld = w;
+    this.applyDrag(this.drag.handle, w, dx, dy);
+    // Hole-circle drags don't mutate this.shape — only the holeTarget. The
+    // candidate is derived in render(); we don't fire onChange because the
+    // committed shape is still unchanged. Other drag kinds did mutate.
+    if (!this.drag.holeTarget) this.cb.onChange();
     this.render();
   };
 
   private onMouseUp = (): void => {
     if (this.isZeroState()) return;
-    if (this.drag) {
-      this.drag = null;
-      this.updateStatus({ level: "valid", message: null });
-      // Shape extents may have changed mid-drag; refit now (animates).
-      this.refit();
+    if (!this.drag) return;
+    // Finalize a hole-circle drag against the live base: ok or warning →
+    // commit the candidate (warning is a polygon-converted candidate the
+    // user has been seeing already); error → discard, this.shape was never
+    // mutated so there's nothing to undo.
+    const finalize = this.moveHoleResult();
+    if (finalize && (finalize.kind === "ok" || finalize.kind === "warning")) {
+      this.shape = finalize.shape;
+      this.selection = finalize.preselect ?? this.selection;
+      this.cb.onSelectionChange(this.selection);
+      this.cb.onChange();
     }
+    this.drag = null;
+    // Shape extents may have changed mid-drag; refit now (animates).
+    this.refit();
+    this.render();
   };
 
   private onContextMenu = (ev: MouseEvent): void => {
@@ -336,66 +397,63 @@ export class Editor {
     }
   };
 
-  // Returns true if the drag step was applied. Hole-circle drags route
-  // through the op model and can refuse a step that would invalidate the
-  // shape; everything else applies unconditionally.
-  private applyDrag(h: Handle, world: Vec2, dx: number, dy: number): boolean {
+  // Hole-circle handles update drag.holeTarget — the candidate shape is
+  // derived in render() from previewOp(this.shape, move-hole, holeTarget).
+  // All other handles mutate this.shape in place.
+  private applyDrag(h: Handle, world: Vec2, dx: number, dy: number): void {
     const sel = h.selection;
     switch (h.kind) {
       case "diskCenter": {
-        if (this.shape.kind !== "disk") return false;
+        if (this.shape.kind !== "disk") return;
         this.shape.cx = world.x;
         this.shape.cy = world.y;
-        return true;
+        return;
       }
       case "diskRadius": {
-        if (this.shape.kind !== "disk") return false;
+        if (this.shape.kind !== "disk") return;
         const r = Math.hypot(world.x - this.shape.cx, world.y - this.shape.cy);
         this.shape.r = Math.max(0.1, r);
-        return true;
+        return;
       }
       case "holeCenter": {
-        if (sel.kind !== "hole") return false;
-        const hole = this.shape.holes[sel.index];
-        if (!hole || hole.kind !== "circle") return false;
-        return this.tryMoveHole(sel.index, world.x, world.y, hole.r);
+        if (!this.drag?.holeTarget) return;
+        this.drag.holeTarget.cx = world.x;
+        this.drag.holeTarget.cy = world.y;
+        return;
       }
       case "holeRadius": {
-        if (sel.kind !== "hole") return false;
-        const hole = this.shape.holes[sel.index];
-        if (!hole || hole.kind !== "circle") return false;
-        const r = Math.max(0.1, Math.hypot(world.x - hole.cx, world.y - hole.cy));
-        return this.tryMoveHole(sel.index, hole.cx, hole.cy, r);
+        if (!this.drag?.holeTarget) return;
+        const t = this.drag.holeTarget;
+        t.r = Math.max(0.1, Math.hypot(world.x - t.cx, world.y - t.cy));
+        return;
       }
       case "vertex": {
         // index === -1 means "interior drag of whole prim" (translate all vertices).
         const ol = this.outlineFor(sel);
-        if (!ol) return false;
+        if (!ol) return;
         if (h.index === -1) {
           for (const p of ol) { p.x += dx; p.y += dy; }
         } else if (h.index !== undefined) {
           const v = ol[h.index];
           if (v) { v.x = world.x; v.y = world.y; }
         }
-        return true;
+        return;
       }
       // edgeMid is handled by insertVertexAtEdge before drag starts; not reached here.
     }
-    return false;
   }
 
-  // Hole drag goes through previewOp(move-hole). Commit on ok; on warning
-  // or error, hold the drag at the last valid position and surface the
-  // status (so the user sees why the cursor isn't pulling the hole along).
-  private tryMoveHole(index: number, cx: number, cy: number, r: number): boolean {
-    const result = previewOp(this.shape, { kind: "move-hole", index, cx, cy, r });
-    if (result.kind === "ok") {
-      this.shape = result.shape;
-      this.updateStatus({ level: "valid", message: null });
-      return true;
-    }
-    this.updateStatus(statusFromResult(result));
-    return false;
+  // Run the move-hole op against this.shape with the live drag target.
+  // Same call drives status display and onMouseUp finalization. Returns
+  // null when the drag isn't a hole-circle drag.
+  private moveHoleResult(): OpResult | null {
+    if (!this.drag?.holeTarget) return null;
+    const sel = this.drag.handle.selection;
+    if (sel.kind !== "hole") return null;
+    return previewOp(this.shape, {
+      kind: "move-hole", index: sel.index,
+      cx: this.drag.holeTarget.cx, cy: this.drag.holeTarget.cy, r: this.drag.holeTarget.r,
+    });
   }
 
   private insertVertexAtEdge(h: Handle): number | null {
@@ -473,6 +531,7 @@ function statusFromResult(r: OpResult): ToolStatus {
   if (r.kind === "warning") return { level: "warning", message: r.message };
   return { level: "error", message: r.reason };
 }
+
 
 function pointInPolygon(p: Vec2, poly: Outline): boolean {
   let inside = false;
