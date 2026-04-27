@@ -77,9 +77,9 @@ const MIN_RADIUS = 0.1;
 
 export function apply(base: AuthoringShape, op: Op): ApplyResult {
   switch (op.kind) {
-    case "paint-rect":        return previewPaintRect(base, op.anchor, op.cursor);
-    case "erase-rect":        return previewEraseRect(base, op.anchor, op.cursor);
-    case "add-hole":          return previewAddHole(base, op.center, op.cursor);
+    case "paint-rect":        return paintRect(base, op.anchor, op.cursor);
+    case "erase-rect":        return eraseRect(base, op.anchor, op.cursor);
+    case "add-hole":          return addHole(base, op.center, op.cursor);
     case "move-vert":         return moveVert(base, op.sel, op.index, op.target);
     case "delete-vert":       return deleteVert(base, op.sel, op.index);
     case "insert-vert":       return insertVert(base, op.sel, op.afterIndex);
@@ -93,7 +93,7 @@ export function apply(base: AuthoringShape, op: Op): ApplyResult {
 
 // ----- paint-rect -----
 
-function previewPaintRect(base: AuthoringShape, p1: Vec2, p2: Vec2): ApplyResult {
+function paintRect(base: AuthoringShape, p1: Vec2, p2: Vec2): ApplyResult {
   const rect = rectFromCorners(p1, p2);
   if (!rect) return err("rectangle has zero area");
 
@@ -107,7 +107,7 @@ function previewPaintRect(base: AuthoringShape, p1: Vec2, p2: Vec2): ApplyResult
   // a MultiPolygon; >1 piece means the user's rect didn't overlap any outer
   // and would create a disconnected shape.
   const outerMP: MultiPolygon = polygonClipping.union(baseOuterMP, [[outlineToRing(rect)]]);
-  if (outerMP.length === 0) return err("paint produced empty outer (impossible?)");
+  if (outerMP.length === 0) return invalid("paint-rect: union produced empty MultiPolygon");
   if (outerMP.length > 1)   return err("rect doesn't overlap the existing shape (would create disconnected piece)");
 
   const piece = outerMP[0]!;
@@ -141,7 +141,7 @@ function previewPaintRect(base: AuthoringShape, p1: Vec2, p2: Vec2): ApplyResult
 // hole, or the disk outer itself) triggers the warning so the user knows
 // drag-center / drag-radius is gone.
 
-function previewEraseRect(base: AuthoringShape, p1: Vec2, p2: Vec2): ApplyResult {
+function eraseRect(base: AuthoringShape, p1: Vec2, p2: Vec2): ApplyResult {
   const rect = rectFromCorners(p1, p2);
   if (!rect) return err("rectangle has zero area");
   const rectMP: MultiPolygon = [[outlineToRing(rect)]];
@@ -210,7 +210,7 @@ function previewEraseRect(base: AuthoringShape, p1: Vec2, p2: Vec2): ApplyResult
 //            their circle-ness identity).
 //   - rejected: zero radius, or entirely outside the shape.
 
-function previewAddHole(base: AuthoringShape, center: Vec2, edge: Vec2): ApplyResult {
+function addHole(base: AuthoringShape, center: Vec2, edge: Vec2): ApplyResult {
   const r = Math.hypot(edge.x - center.x, edge.y - center.y);
   return addHoleAt(base, center, r);
 }
