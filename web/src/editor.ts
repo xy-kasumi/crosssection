@@ -86,6 +86,7 @@ export class Editor {
   // stays responsive if a preview is somehow stuck.
   private previewShape: AuthoringShape | null = null;
   private previewDim: Outline[] | null = null;
+  private previewInvalid = false;
 
   constructor(canvas: HTMLCanvasElement, initial: AuthoringShape, cb: EditorCallbacks) {
     this.canvas = canvas;
@@ -148,10 +149,15 @@ export class Editor {
   // Host-driven preview overlay (symmetrize popup, etc.). `s = null` clears
   // the shape preview but `opts.dim` still applies if given — useful for
   // hovering an invalid option where we want to show the dim region but
-  // leave the actual shape unchanged.
-  setPreviewShape(s: AuthoringShape | null, opts: { dim?: Outline[] | null } = {}): void {
+  // leave the actual shape unchanged. `opts.invalid = true` redraws the
+  // visible shape outline in the shared invalid-red treatment.
+  setPreviewShape(
+    s: AuthoringShape | null,
+    opts: { dim?: Outline[] | null; invalid?: boolean } = {},
+  ): void {
     this.previewShape = s;
     this.previewDim = opts.dim ?? null;
+    this.previewInvalid = opts.invalid ?? false;
     this.render();
   }
 
@@ -208,7 +214,7 @@ export class Editor {
     this.updateStatus(status);
     this.handles = draw(
       this.canvas, this.view, displayShape, displayComposed, this.selection,
-      preview, this.dragCursor(), this.previewDim,
+      preview, this.dragCursor(), this.previewDim, this.previewInvalid,
     );
   }
 

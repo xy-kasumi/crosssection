@@ -318,21 +318,6 @@ main {
   color: var(--accent);
 }
 
-/* Vivid red treatment when the hovered Symmetrize option would fail —
-   the status text alone wasn't strong enough. */
-.canvas-wrap.preview-invalid {
-  outline: 3px solid rgba(220, 50, 50, 0.9);
-  outline-offset: -3px;
-}
-.canvas-wrap.preview-invalid::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: rgba(220, 50, 50, 0.18);
-  pointer-events: none;
-  border-radius: var(--radius-surface);
-}
-
 .snap-toggle {
   display: inline-flex;
   align-items: center;

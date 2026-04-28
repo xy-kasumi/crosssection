@@ -14,7 +14,9 @@ export class Toolbar {
 
   constructor(opts: { editor: Editor }) {
     this.editor = opts.editor;
-    this.toolBtns = Array.from(document.querySelectorAll<HTMLButtonElement>(".tool-btn"));
+    // [data-tool] filter — other toolbar buttons (e.g. Symmetrize) reuse the
+    // .tool-btn class for styling but are not editor tools.
+    this.toolBtns = Array.from(document.querySelectorAll<HTMLButtonElement>(".tool-btn[data-tool]"));
     this.snap = document.getElementById("snap-toggle") as HTMLInputElement;
 
     for (const b of this.toolBtns) {

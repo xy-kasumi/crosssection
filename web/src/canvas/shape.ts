@@ -9,7 +9,7 @@ export function drawShape(
   ctx: CanvasRenderingContext2D,
   view: View,
   shape: SolverShape,
-  opts: { faded?: boolean } = {},
+  opts: { faded?: boolean; invalid?: boolean } = {},
 ): void {
   const path = new Path2D();
   for (const ring of shape) {
@@ -22,6 +22,16 @@ export function drawShape(
   }
   const fillAlpha = opts.faded ? 0.10 : 0.22;
   const strokeAlpha = opts.faded ? 0.45 : 1;
+  // Invalid: same red as tool-preview's invalid state, so the user reads
+  // "this won't commit" the same way regardless of where it surfaces.
+  if (opts.invalid) {
+    ctx.fillStyle = `rgba(220, 70, 60, ${fillAlpha})`;
+    ctx.fill(path, "evenodd");
+    ctx.strokeStyle = "rgb(220, 70, 60)";
+    ctx.lineWidth = 2;
+    ctx.stroke(path);
+    return;
+  }
   ctx.fillStyle = `rgba(80, 130, 230, ${fillAlpha})`;
   ctx.fill(path, "evenodd");
   ctx.strokeStyle = `rgba(80, 130, 230, ${strokeAlpha})`;

@@ -109,6 +109,7 @@ export function draw(
   toolPreview: ToolPreview | null = null,
   dragCursor: Vec2 | null = null,
   dimRegions: readonly Outline[] | null = null,
+  invalid: boolean = false,
 ): Handle[] {
   const ctx = canvas.getContext("2d");
   if (!ctx) return [];
@@ -122,8 +123,9 @@ export function draw(
 
   // Filled silhouette (the FEM-facing composed shape). Faded while a tool is
   // active so the new prim can sit visually on top without dissolving into
-  // the existing shape.
-  if (composed) drawShape(ctx, view, composed, { faded: toolPreview !== null });
+  // the existing shape. `invalid` swaps to the red treatment shared with
+  // tool-preview's invalid state.
+  if (composed) drawShape(ctx, view, composed, { faded: toolPreview !== null, invalid });
 
   // Selection-aware handles. Hidden while a tool is active — the ghost owns
   // the visual focus, and stray handles would invite stray clicks.

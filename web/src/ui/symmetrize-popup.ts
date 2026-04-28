@@ -34,7 +34,6 @@ export class SymmetrizePopup {
   private readonly parentBtn: HTMLButtonElement;
   private readonly popupEl: HTMLElement;
   private readonly optionBtns: HTMLButtonElement[];
-  private readonly canvasWrap: HTMLElement;
 
   private isOpen = false;
   private current: Preview | null = null;
@@ -45,7 +44,6 @@ export class SymmetrizePopup {
     this.parentBtn = document.getElementById("symmetrize-btn") as HTMLButtonElement;
     this.popupEl = document.getElementById("symmetrize-popup") as HTMLElement;
     this.optionBtns = Array.from(this.popupEl.querySelectorAll<HTMLButtonElement>(".sym-option"));
-    this.canvasWrap = document.querySelector(".canvas-wrap") as HTMLElement;
 
     this.parentBtn.addEventListener("click", (ev) => {
       ev.stopPropagation();
@@ -97,16 +95,15 @@ export class SymmetrizePopup {
     const result = symCompose(E, spec.kind);
     const dim = dimRegionsOf(spec.kind);
 
-    this.canvasWrap.classList.toggle("preview-invalid", result.kind === "error");
-
     if (result.kind === "error") {
       this.onStatus({
         level: "error",
         message: `${spec.label}: ${errorText(result)}`,
       });
-      // Keep the original shape visible; the vivid red wash on the canvas
-      // wrap (CSS) plus the status text are the "this would fail" signals.
-      this.editor.setPreviewShape(null, { dim });
+      // No preview shape (we don't have a valid one). The original shape
+      // gets re-stroked in invalid-red so the user reads "this won't commit"
+      // the same way they do for a tool-preview gone wrong.
+      this.editor.setPreviewShape(null, { dim, invalid: true });
     } else if (result.kind === "warning") {
       this.onStatus({
         level: "warning",
@@ -124,7 +121,6 @@ export class SymmetrizePopup {
     if (!this.current) return;
     this.current = null;
     this.editor.setPreviewShape(null);
-    this.canvasWrap.classList.remove("preview-invalid");
     this.onStatus({ level: "valid", message: null });
   }
 
