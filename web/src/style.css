@@ -199,7 +199,7 @@ main {
 }
 .start-row-label {
   flex-shrink: 0;
-  width: 48px;
+  width: 60px;
   font-family: var(--ff-mono);
   font-size: var(--fs-ui);
   opacity: 0.75;
@@ -225,7 +225,7 @@ main {
   font-size: 16px;
   line-height: 1;
 }
-.start-tag { opacity: 0.75; font-family: var(--ff-mono); }
+.start-tag { opacity: 0.75; }
 
 .results-section {
   margin-top: auto;        /* push readouts to the bottom of the left column */

@@ -41,6 +41,22 @@ const ENTRIES: Entry[] = [
   // Right-strip wordmark — per-locale. Credit (夕月霞) and source link stay
   // language-neutral; they are not in this map.
   { sel: "#wordmark",                                            en: "crosssection", ja: "断面形状" },
+
+  // Readout tooltips. Native title=; the JP phrasing uses 「まわり」(about)
+  // because Iₓ governs bending **about** the X axis, not "in the X
+  // direction" — the latter would imply translation along X.
+  { sel: ".readout-a",  attr: "title",
+    en: "Cross-sectional area",
+    ja: "面積" },
+  { sel: ".readout-ix", attr: "title",
+    en: "Second moment of area — resistance to bending about the X axis",
+    ja: "断面二次モーメント — X軸まわりの曲がりにくさ" },
+  { sel: ".readout-iy", attr: "title",
+    en: "Second moment of area — resistance to bending about the Y axis",
+    ja: "断面二次モーメント — Y軸まわりの曲がりにくさ" },
+  { sel: ".readout-j",  attr: "title",
+    en: "Torsional constant — resistance to twisting",
+    ja: "ねじり定数 — ねじれにくさ" },
 ];
 
 export function applyStaticLabels(): void {

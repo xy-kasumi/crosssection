@@ -37,8 +37,8 @@ function showFatalOverlay(summary: string, detail: unknown): void {
     : String(detail ?? summary);
   const msg = t({ en: "Something went wrong.", ja: "予期しないエラーが発生しました。" });
   const desc = t({
-    en: "The editor hit an unexpected internal state. Reload to start fresh — your unsaved geometry will be lost.",
-    ja: "エディタが不正な状態になりました。リロードしてやり直してください — 保存していない形状は失われます。",
+    en: "The editor hit an unexpected internal state. Reload to start fresh — the current shape will be lost.",
+    ja: "エディタが不正な状態になりました。リロードしてやり直してください — 現在の形状は失われます。",
   });
   const reloadLabel = t({ en: "Reload", ja: "リロード" });
   const detailsLabel = t({ en: "Details", ja: "詳細" });
