@@ -14,10 +14,16 @@ import type { Editor } from "../editor.ts";
 type Preset = "rod" | "rect" | "extrusion";
 type FieldDef = { name: string; label: string; min: number; step: number };
 
+// Floor for initial-size dimensions. 0.02 mm is the smallest the editor
+// accepts at preset entry — well above the 0.0001 mm coord grid so a
+// freshly-built shape has room to be edited without immediately bumping
+// against quantization.
+const MIN_INITIAL_DIM = 0.02;
+
 const PRESET_FIELDS: Record<Preset, FieldDef[]> = {
-  rod:       [{ name: "D", label: "D", min: 0.1, step: 0.5 }],
-  rect:      [{ name: "W", label: "W", min: 0.1, step: 0.5 },
-              { name: "H", label: "H", min: 0.1, step: 0.5 }],
+  rod:       [{ name: "D", label: "D", min: MIN_INITIAL_DIM, step: 0.5 }],
+  rect:      [{ name: "W", label: "W", min: MIN_INITIAL_DIM, step: 0.5 },
+              { name: "H", label: "H", min: MIN_INITIAL_DIM, step: 0.5 }],
   extrusion: [{ name: "S", label: "S", min: 1010, step: 1 }],
 };
 const PRESET_DEFAULTS: Record<Preset, Record<string, number>> = {
@@ -127,7 +133,7 @@ export class StartPane {
       const vals: Record<string, number> = {};
       for (let i = 0; i < fields.length; i++) {
         const v = Number(inputs[i]!.value);
-        if (!isFinite(v) || v <= 0) return;
+        if (!isFinite(v) || v < fields[i]!.min) return;
         vals[fields[i]!.name] = v;
       }
       this.setShapeFromPreset(preset, vals, { refit: false });
