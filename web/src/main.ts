@@ -11,7 +11,7 @@ import { SymmetrizePopup } from "./ui/symmetrize-popup.ts";
 import { Toolbar } from "./ui/toolbar.ts";
 import { CanvasStatus } from "./ui/canvas-status.ts";
 import { ZeroState } from "./ui/zero-state.ts";
-import { toWire } from "@solver/shape.ts";
+import { ringSignedArea, sharpCornerCount, toWire, type SolverShape } from "@solver/shape.ts";
 import { t } from "./ui/i18n.ts";
 import { applyStaticLabels } from "./ui/i18n-static.ts";
 import { mountLangSwitch } from "./ui/lang-switch.ts";
@@ -124,13 +124,33 @@ function recompute(): void {
     solveTimer = null;
     const id = nextId++;
     readouts.setComputing(true);
-    let maxExtent = 0;
-    for (const ring of composed) for (const p of ring) {
-      maxExtent = Math.max(maxExtent, Math.abs(p.x), Math.abs(p.y));
-    }
-    const meshSize = Math.max(0.05, maxExtent / 10);
-    core.solve(id, toWire(composed), meshSize);
+    core.solve(id, toWire(composed), pickMeshSize(composed));
   }, 80);
+}
+
+// `mesh_size` is target max element AREA (mm²); element count scales as
+// area / meshSize, so targeting an element count keeps accuracy
+// size-invariant. The right element count depends on shape *complexity*,
+// not size: smooth boundaries (rect, polygonized circle) converge at
+// ~100 quadratic elements; sharp 90° corners introduce warping-function
+// singularities that need mesh concentration to resolve.
+//
+// Empirical fit (solver/tests/bench-mesh.ts):
+//   rect (4 sharp), triangle (3), circle 64-gon (0): converge at N=100.
+//   T-slot (~44 sharp): converges at N=500.
+//   12 × sharp_count tracks this within the ranges we measured.
+// N_FLOOR/CEIL bound wall-clock so a pathological 1000-tooth shape
+// degrades to ~6 s rather than spinning forever.
+const N_FLOOR = 100;
+const N_CEIL  = 2000;
+const SHARP_FACTOR = 12;
+const MIN_MESH_AREA = 0.0001;
+function pickMeshSize(composed: SolverShape): number {
+  let area = 0;
+  for (const ring of composed) area += ringSignedArea(ring);
+  const sharp = sharpCornerCount(composed);
+  const N = Math.min(N_CEIL, Math.max(N_FLOOR, SHARP_FACTOR * sharp));
+  return Math.max(MIN_MESH_AREA, area / N);
 }
 
 zeroState.start();
