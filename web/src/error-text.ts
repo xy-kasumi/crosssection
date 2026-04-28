@@ -26,5 +26,11 @@ export function errorText(e: ErrorTag): string {
       return "shape would have multiple disjoint pieces";
     case "breaks-polygon":
       return "outline must have at least 3 vertices";
+    case "self-intersecting":
+      return "outline must not cross itself";
+    case "hole-overlap":
+      return "hole must not overlap outer or another hole";
+    case "outers-overlap":
+      return "outlines must not overlap each other";
   }
 }

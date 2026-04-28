@@ -11,6 +11,7 @@ import {
   outlineToRing,
   ringFromCircle,
   ringToOutline,
+  selfIntersects,
 } from "./internal.ts";
 
 export type Vec2 = { x: number; y: number };
@@ -36,16 +37,26 @@ export type Selection =
 // rendering and highlighting work the same way regardless of which layer
 // caught it.
 //
-// `holeIndex` is optional and present only when geom can pin the issue to a
-// specific hole. UI may use it to highlight; the user-facing text doesn't
-// need to expose the index.
+// `holeIndex` / `outerIndex` are optional and present only when geom can
+// pin the issue to a specific prim. UI may use them to highlight; the
+// user-facing text doesn't need to expose the index.
+//
+// AuthoringShape invariants enforced by compose():
+//   - every outline (outers + polygon holes) is simple — no edge crossings.
+//   - holes lie entirely inside the outer (a hole entirely outside is the
+//     one exception: silently dropped + warning).
+//   - holes are pairwise disjoint.
+//   - multiple outers don't overlap.
 export type ErrorTag =
   | { tag: "empties-shape" }
   | { tag: "disconnects-shape" }
-  | { tag: "breaks-polygon";  holeIndex?: number };
+  | { tag: "breaks-polygon";     holeIndex?: number }
+  | { tag: "self-intersecting";  outerIndex?: number; holeIndex?: number }
+  | { tag: "hole-overlap";       holeIndex?: number }
+  | { tag: "outers-overlap" };
 
-// A hole that lies outside (or crosses) the outer is silently dropped from
-// the result; it's lossy but recoverable, so it's a warning rather than an
+// A hole that lies entirely outside the outer is silently dropped from the
+// result; it's lossy but recoverable, so it's a warning rather than an
 // error. circle-lost fires when a circle prim becomes a polygon.
 export type WarnTag =
   | { tag: "circle-lost" }
@@ -56,46 +67,73 @@ export type ComposeError = { ok: false } & ErrorTag;
 export type ComposeResult = ComposeOk | ComposeError;
 
 export function compose(s: AuthoringShape): ComposeResult {
-  // Build the outer ring(s).
+  // 1. Build the outer ring(s) and check simplicity + disjointness.
   let outerMP: MultiPolygon;
   if (s.kind === "disk") {
     if (!(s.r > 0)) return { ok: false, tag: "empties-shape" };
     outerMP = outerMultiPolygonOf(s);
   } else {
-    const outerRings = s.outers.map(outlineToRing).filter((r) => r.length >= 4);
-    if (outerRings.length === 0) return { ok: false, tag: "empties-shape" };
-    outerMP = polygonClipping.union(...outerRings.map((r): MultiPolygon => [[r]]));
+    const rings = s.outers.map(outlineToRing).filter((r) => r.length >= 4);
+    if (rings.length === 0) return { ok: false, tag: "empties-shape" };
+    for (let i = 0; i < s.outers.length; i++) {
+      if (selfIntersects(s.outers[i]!)) {
+        return { ok: false, tag: "self-intersecting", outerIndex: i };
+      }
+    }
+    // Pairwise overlap on multi-outer shapes. polygon-clipping union would
+    // silently merge overlapping outers; we want to reject instead.
+    for (let i = 0; i < rings.length; i++) {
+      for (let j = i + 1; j < rings.length; j++) {
+        if (polygonClipping.intersection([[rings[i]!]], [[rings[j]!]]).length > 0) {
+          return { ok: false, tag: "outers-overlap" };
+        }
+      }
+    }
+    outerMP = polygonClipping.union(...rings.map((r): MultiPolygon => [[r]]));
   }
   if (outerMP.length === 0) return { ok: false, tag: "empties-shape" };
   if (outerMP.length > 1)   return { ok: false, tag: "disconnects-shape" };
-
-  // The single piece may already have computed holes (from polygon-clipping merging
-  // outers that overlap). It shouldn't, in our model, but defend against it.
   const piece = outerMP[0]!;
   const outer = piece[0]!;
-  const computedHoles = piece.slice(1);
 
-  // Add user-declared holes. Holes with too few points are an error (we
-  // can't represent them). Holes that lie outside or cross the outer get
-  // silently dropped + warning — recoverable lossy.
+  // 2. Validate user-declared holes against the invariants.
+  //    - polygon-hole outlines must be simple.
+  //    - each hole must not partially cross the outer (entirely outside is
+  //      the recoverable warning case; entirely inside is required).
+  //    - holes must be pairwise disjoint.
   const userHoles: Outline[] = [];
+  const acceptedRings: [number, number][][] = []; // rings of holes that passed containment
   let warning: WarnTag | null = null;
   for (let i = 0; i < s.holes.length; i++) {
     const h = s.holes[i]!;
+    if (h.kind === "polygon" && selfIntersects(h.outline)) {
+      return { ok: false, tag: "self-intersecting", holeIndex: i };
+    }
     const ring = h.kind === "circle" ? ringFromCircle(h.cx, h.cy, h.r) : outlineToRing(h.outline);
     if (ring.length < 4) return { ok: false, tag: "breaks-polygon", holeIndex: i };
     const holeMP: MultiPolygon = [[ring]];
-    const outside = polygonClipping.difference(holeMP, [piece]);
-    if (outside.length > 0) {
+    const inside = polygonClipping.intersection(holeMP, [piece]);
+    if (inside.length === 0) {
+      // Entirely outside the outer: recoverable, drop with warning.
       if (warning === null) warning = { tag: "hole-outside-shape", holeIndex: i };
       continue;
     }
+    if (polygonClipping.difference(holeMP, [piece]).length > 0) {
+      // Partial cross: hole overlaps the outer boundary.
+      return { ok: false, tag: "hole-overlap", holeIndex: i };
+    }
+    // Pairwise overlap with already-accepted holes.
+    for (const prev of acceptedRings) {
+      if (polygonClipping.intersection(holeMP, [[prev]]).length > 0) {
+        return { ok: false, tag: "hole-overlap", holeIndex: i };
+      }
+    }
+    acceptedRings.push(ring);
     userHoles.push(ringToOutline(ring));
   }
 
   const shape: SolverShape = [
     ringToSolverPolygon(outer),
-    ...computedHoles.map(ringToSolverPolygon),
     ...userHoles.map(outlineToSolverPolygon),
   ];
   return warning !== null ? { ok: true, shape, warning } : { ok: true, shape };
