@@ -1,13 +1,19 @@
 # geom
 
 Pure, immutable geometry kernel for the editor. No DOM, no canvas, no
-Pyodide — runs unchanged under plain Node, which is the whole point.
+Pyodide — runs unchanged under plain Node.
+
+The AuthoringShape contract and the meaning of each apply result live at
+the top of `shape.ts` and `apply.ts` respectively; this README only covers
+what's not in the source.
 
 ## Public surface
 
 ```
 import {
   apply,
+  check,
+  compose,
   rodOf,
   type AuthoringShape,
   type Op,
@@ -16,34 +22,18 @@ import {
 } from "@geom";
 ```
 
-- `AuthoringShape` carries its composed (solver-ready) form in its
-  `composed` field. Construction goes only through preset constructors
-  and `apply()`; both compose internally so `{data, composed}` cannot
-  drift.
-- `apply(shape, op)` returns one of:
-  - `{kind: "ok",      shape, preselect?}`         — clean commit
-  - `{kind: "warning", shape, preselect?, ...w}`   — committable but lossy (`w: WarnTag`)
-  - `{kind: "error",   ...e}`                      — geometry rejected (`e: ErrorTag`)
-  - `{kind: "invalid", reason}`                    — bug; consumer must surface and crash
+`check` is the validity gate; `compose` is a pure translation to
+`SolverShape` (caller has already checked).
 
-`ErrorTag` and `WarnTag` are shared with `compose()` — from the caller's
-view there's no "compose" layer, just "did this op produce a valid
-geometry?" Indexed variants carry an optional `holeIndex` for UI
-highlighting; the text rendering doesn't need it.
+## Conventions
 
-No human-language strings live in `geom/`. The dev-facing `OpInvalid.reason`
-is the one exception, and only because it never reaches end-user surfaces
-(consumers are expected to throw on `invalid`).
-
-## Invariants
-
-- All data is `readonly`. `apply()` returns a fresh `AuthoringShape`.
+- All data treated as immutable. `apply()` returns a fresh shape.
 - `Vec2` is the only positional vocabulary on the public surface — no
-  `cx, cy, x, y` parameters anywhere external. Internals (in
-  `internal.ts`) may use whatever the upstream library expects.
-- `apply()` composes synchronously and eagerly. No lazy thunks.
+  `cx/cy/x/y` parameters externally. Internals may use upstream conventions.
+- No human-language strings except `OpInvalid.reason`, which is dev-facing
+  (consumers throw on `invalid`).
 
 ## Dependencies
 
-`geom` depends only on `@solver/shape.ts` (type-only, for `SolverShape`).
-Nothing imports from `web/`. There are no cycles.
+Depends only on `@solver/shape.ts` (type-only, for `SolverShape`). Nothing
+imports from `web/`. No cycles.
