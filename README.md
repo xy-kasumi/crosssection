@@ -9,7 +9,7 @@ In-browser calculator for 2D cross-section properties, including:
 * **Iₓ**, **Iᵧ** ([second moments of area](https://en.wikipedia.org/wiki/Second_moment_of_area))
 * **J** ([torsional constant](https://en.wikipedia.org/wiki/Torsion_constant)).
 
-Static, local-only SPA; the heavy lifting is `sectionproperties` (Python) running in Pyodide.
+Static, local-only SPA; the heavy lifting (FEM) is [`sectionproperties`](https://github.com/robbievanleeuwen/section-properties) (Python) running in Pyodide.
 
 ## File Layout
 
@@ -29,7 +29,7 @@ flowchart LR
 
 ## Architecture notes
 
-- Compute runs in Pyodide using [`sectionproperties`](https://github.com/robbievanleeuwen/section-properties) (Robbie van Leeuwen) plus [`cytriangle`](https://github.com/m-clare/cytriangle) (Cython wrapper around Shewchuk's [Triangle](https://www.cs.cmu.edu/~quake/triangle.html)). cytriangle has no Pyodide wheel on PyPI; we build one and commit it under `solver/wheels/`. See `solver/pyodide-build/cytriangle/README.md`.
+- Compute runs in Pyodide using [`sectionproperties`](https://github.com/robbievanleeuwen/section-properties) plus [`cytriangle`](https://github.com/m-clare/cytriangle). cytriangle has no Pyodide wheel on PyPI; we build one and commit it under `solver/wheels/`. See `solver/pyodide-build/cytriangle/README.md`.
 - Tests run under Pyodide-on-Node, not in a browser — same Python, same wheels, same numerics. Every expected value cites an external source; self-computed regression baselines are not allowed.
 - The web editor talks to `geom/` through `apply(shape, op) → ok | warn | err | invalid`; the editor never mutates shape state directly. The split exists so geometry decisions are unit-testable without a canvas — see [`editor-model.md`](editor-model.md).
 
