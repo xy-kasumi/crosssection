@@ -271,24 +271,6 @@ export class Editor {
     // 1. If we hit a handle, start a handle drag.
     const hit = hitHandle(this.view, this.handles, sx, sy);
     if (hit) {
-      // Edge-mid handle: insert a vertex first, then drag the new vertex.
-      if (hit.kind === "edgeMid" && hit.index !== undefined) {
-        const insertOp: Op = { kind: "insert-vert", sel: hit.selection, afterIndex: hit.index };
-        const result = apply(this.shape, insertOp);
-        crashIfInvalid(result, insertOp);
-        if (result.kind === "ok" || result.kind === "warning") {
-          this.shape = result.shape;
-          this.cb.onChange();
-          this.render();
-          // The newly inserted vertex sits at hit.index + 1.
-          const newIdx = hit.index + 1;
-          const newVertex = this.handles.find(
-            (h) => h.kind === "vertex" && sameSelection(h.selection, hit.selection) && h.index === newIdx,
-          );
-          if (newVertex) this.beginDrag(newVertex);
-        }
-        return;
-      }
       this.beginDrag(hit);
       return;
     }
@@ -320,11 +302,7 @@ export class Editor {
     if (!this.drag) return;
     const w = this.snapWorld(this.cursorWorld);
     const op = this.opFromDrag(this.drag, w);
-    if (!op) {
-      // Edge-mid placeholder somehow got here — shouldn't happen because
-      // edge-mid is converted to a vertex drag in onMouseDown.
-      return;
-    }
+    if (!op) return;
     const result = apply(this.drag.startShape, op);
     crashIfInvalid(result, op);
     this.drag.previewResult = result;
@@ -389,7 +367,8 @@ export class Editor {
   };
 
   // Build the right Op for the current drag and the snapped cursor world
-  // position. Returns null only for the (unreachable) edge-mid placeholder.
+  // position. Returns null when the drag start state is incoherent (e.g.
+  // a disk-radius drag against a non-disk base).
   private opFromDrag(d: DragState, cursor: Vec2): Op | null {
     const h = d.handle;
     const sel = h.selection;
@@ -415,8 +394,6 @@ export class Editor {
       case "vertex":
         if (h.index === undefined || h.index < 0) return null;
         return { kind: "move-vert", sel, index: h.index, target: cursor };
-      case "edgeMid":
-        return null; // handled in onMouseDown
     }
   }
 

@@ -30,7 +30,7 @@ Tool gestures (toolbar-driven, two clicks):
 Drag-derived (mousedown captures `dragStartShape`/`dragStartCursor`; each frame
 issues an op against the captured base with a cumulative delta — never against
 the previous frame's result):
-- `move-vert`, `delete-vert`, `insert-vert` — vertex-level edits to any polygon outline.
+- `move-vert`, `delete-vert` — vertex-level edits to any polygon outline.
 - `move-disk-center`, `move-disk-radius` — disk primitive.
 - `move-hole-center`, `move-hole-radius` — circle-hole primitive. Both go through the add-hole pipeline so crossing the outer polygonizes (warning).
 - `translate-prim` — drag a whole prim by a Vec2 delta. Translating a circle hole that ends up crossing the outer goes through the same polygonization path as `move-hole-center`.

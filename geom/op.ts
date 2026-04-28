@@ -1,9 +1,7 @@
-// Op union — finer than UI gestures. One mousemove may issue several Ops
-// (e.g. an edge-mid click expands to insert-vert + move-vert).
-//
-// Tool-driven gestures (paint-rect, erase-rect, add-hole) keep their
-// anchor/cursor pair vocabulary. There's no whole-prim translate: circles
-// move by their center handle, polygons by their vertices.
+// Op union — finer than UI gestures. Tool-driven gestures (paint-rect,
+// erase-rect, add-hole) keep their anchor/cursor pair vocabulary. There's
+// no whole-prim translate: circles move by their center handle, polygons
+// by their vertices.
 
 import type { Selection, Vec2 } from "./shape.ts";
 
@@ -15,7 +13,6 @@ export type Op =
   // Vertex-level edits (any polygon outline)
   | { kind: "move-vert";   sel: Selection; index: number; target: Vec2 }
   | { kind: "delete-vert"; sel: Selection; index: number }
-  | { kind: "insert-vert"; sel: Selection; afterIndex: number }
   // Disk primitive
   | { kind: "move-disk-center"; target: Vec2 }
   | { kind: "move-disk-radius"; r: number }

@@ -77,7 +77,6 @@ export function apply(base: AuthoringShape, op: Op): ApplyResult {
     case "add-hole":          return addHole(base, op.center, op.cursor);
     case "move-vert":         return moveVert(base, op.sel, op.index, op.target);
     case "delete-vert":       return deleteVert(base, op.sel, op.index);
-    case "insert-vert":       return insertVert(base, op.sel, op.afterIndex);
     case "move-disk-center":  return moveDiskCenter(base, op.target);
     case "move-disk-radius":  return moveDiskRadius(base, op.r);
     case "move-hole-center":  return moveHoleCenter(base, op.index, op.target);
@@ -293,7 +292,7 @@ function addHoleAt(base: AuthoringShape, center: Vec2, r: number): ApplyResult {
   return finalize(candidate, preselect, { tag: "circle-lost" });
 }
 
-// ----- move-vert / delete-vert / insert-vert -----
+// ----- move-vert / delete-vert -----
 
 function moveVert(base: AuthoringShape, sel: Selection, index: number, target: Vec2): ApplyResult {
   const ol = outlineForSel(base, sel);
@@ -314,23 +313,6 @@ function deleteVert(base: AuthoringShape, sel: Selection, index: number): ApplyR
   const candidate = withOutlineReplaced(base, sel, newOl);
   if (!candidate) return invalid(`delete-vert: failed to apply outline to selection ${selDesc(sel)}`);
   return finalize(candidate, sel, null);
-}
-
-function insertVert(base: AuthoringShape, sel: Selection, afterIndex: number): ApplyResult {
-  const ol = outlineForSel(base, sel);
-  if (ol === null) return invalid(`insert-vert: selection ${selDesc(sel)} has no editable outline`);
-  if (afterIndex < 0 || afterIndex >= ol.length) return invalid(`insert-vert: afterIndex ${afterIndex} out of range`);
-  const p = ol[afterIndex]!;
-  const q = ol[(afterIndex + 1) % ol.length]!;
-  const mid: Vec2 = { x: (p.x + q.x) / 2, y: (p.y + q.y) / 2 };
-  const newOl: Outline = [
-    ...ol.slice(0, afterIndex + 1).map((v) => ({ x: v.x, y: v.y })),
-    mid,
-    ...ol.slice(afterIndex + 1).map((v) => ({ x: v.x, y: v.y })),
-  ];
-  const candidate = withOutlineReplaced(base, sel, newOl);
-  if (!candidate) return invalid(`insert-vert: failed to apply outline to selection ${selDesc(sel)}`);
-  return finalize(candidate, { ...sel, ...(sel.kind !== "disk" ? {} : {}) }, null);
 }
 
 // ----- move-disk-* -----

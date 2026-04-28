@@ -36,9 +36,9 @@ export interface View {
 }
 
 export interface Handle {
-  kind: "vertex" | "edgeMid" | "diskCenter" | "diskRadius" | "holeCenter" | "holeRadius";
+  kind: "vertex" | "diskCenter" | "diskRadius" | "holeCenter" | "holeRadius";
   selection: Selection;
-  // For vertex/edgeMid: index into the outline.
+  // For vertex: index into the outline.
   index?: number;
   // World position of the handle.
   x: number;
