@@ -116,7 +116,14 @@ function recompute(): void {
   // compose is a pure translation here.
   const composed = compose(editor.getShape());
   editor.setComposed(composed);
-  if (!core.isReady()) return;
+  if (!core.isReady()) {
+    // User left zero-state before Pyodide finished booting. Without this,
+    // readouts would keep displaying the zero-state demo values until the
+    // solver fired onReady → recompute. Flip to "—" now; onReady will run
+    // a fresh recompute and the normal debounced path takes over.
+    readouts.setComputing(true);
+    return;
+  }
 
   // Debounce — drag emits many events per frame.
   if (solveTimer !== null) clearTimeout(solveTimer);
