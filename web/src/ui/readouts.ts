@@ -24,6 +24,11 @@ export class Readouts {
   // the previous value visible (and faded) so the user sees what's being
   // refined instead of a blank flash.
   private hasComputed = false;
+  // True between fresh entry into computing and the next state transition
+  // (computed/invalid/demo). Lets us treat back-to-back setComputing(true)
+  // calls as no-ops, so the wave doesn't blink off when e.g. the
+  // pre-Pyodide path is followed by a real solve dispatch.
+  private inComputing = false;
   private longTimer: number | null = null;
   private static readonly LONG_DELAY_MS = 3000;
 
@@ -37,6 +42,7 @@ export class Readouts {
 
   setComputed(area: number, ix: number, iy: number, j: number, statusText: string): void {
     this.cancelLong();
+    this.inComputing = false;
     this.area.textContent = twoSigFigs(area);
     this.ix.textContent = twoSigFigs(ix);
     this.iy.textContent = twoSigFigs(iy);
@@ -47,7 +53,9 @@ export class Readouts {
   }
 
   setComputing(on: boolean): void {
-    if (!on) { this.cancelLong(); this.setMode("computed"); return; }
+    if (!on) { this.cancelLong(); this.setMode("computed"); this.inComputing = false; return; }
+    // Already computing? Leave wave / "—" / timer untouched.
+    if (this.inComputing) return;
     if (!this.hasComputed) {
       for (const el of this.allValues()) el.textContent = "—";
     }
@@ -56,10 +64,12 @@ export class Readouts {
       el.classList.remove("invalid");
     }
     this.armLong();
+    this.inComputing = true;
   }
 
   setInvalid(message: string): void {
     this.cancelLong();
+    this.inComputing = false;
     for (const el of this.allValues()) {
       el.textContent = "—";
       el.classList.add("invalid");
@@ -72,6 +82,7 @@ export class Readouts {
   // (used by the zero-state demo, which carries closed-form numbers).
   setDemo(area: number, ix: number, iy: number, j: number): void {
     this.cancelLong();
+    this.inComputing = false;
     this.area.textContent = twoSigFigs(area);
     this.ix.textContent = twoSigFigs(ix);
     this.iy.textContent = twoSigFigs(iy);
