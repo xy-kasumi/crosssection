@@ -2,7 +2,14 @@
 // All four states are mutually exclusive: blank, computing (last value
 // faded), computed (fresh value), invalid (error red). Callers don't poke
 // the DOM directly — they pick a state.
+//
+// Long-computing escalation: if `computing` lingers past LONG_DELAY_MS,
+// readouts swap to an animated wave glyph (.computing-long) and the
+// status line says "still computing…". Communicates "this is genuinely
+// working" without scaring the user — covers slow Pyodide boot, complex
+// shapes, slow machines.
 
+import { t } from "./i18n.ts";
 import { twoSigFigs } from "../format.ts";
 
 export class Readouts {
@@ -17,6 +24,8 @@ export class Readouts {
   // the previous value visible (and faded) so the user sees what's being
   // refined instead of a blank flash.
   private hasComputed = false;
+  private longTimer: number | null = null;
+  private static readonly LONG_DELAY_MS = 3000;
 
   constructor() {
     this.area = document.getElementById("area")!;
@@ -27,6 +36,7 @@ export class Readouts {
   }
 
   setComputed(area: number, ix: number, iy: number, j: number, statusText: string): void {
+    this.cancelLong();
     this.area.textContent = twoSigFigs(area);
     this.ix.textContent = twoSigFigs(ix);
     this.iy.textContent = twoSigFigs(iy);
@@ -37,16 +47,19 @@ export class Readouts {
   }
 
   setComputing(on: boolean): void {
-    if (on && !this.hasComputed) {
+    if (!on) { this.cancelLong(); this.setMode("computed"); return; }
+    if (!this.hasComputed) {
       for (const el of this.allValues()) el.textContent = "—";
     }
     for (const el of this.allValues()) {
-      el.classList.toggle("computing", on);
+      el.classList.add("computing");
       el.classList.remove("invalid");
     }
+    this.armLong();
   }
 
   setInvalid(message: string): void {
+    this.cancelLong();
     for (const el of this.allValues()) {
       el.textContent = "—";
       el.classList.add("invalid");
@@ -58,6 +71,7 @@ export class Readouts {
   // Display arbitrary precomputed values without tagging them as FEM-derived
   // (used by the zero-state demo, which carries closed-form numbers).
   setDemo(area: number, ix: number, iy: number, j: number): void {
+    this.cancelLong();
     this.area.textContent = twoSigFigs(area);
     this.ix.textContent = twoSigFigs(ix);
     this.iy.textContent = twoSigFigs(iy);
@@ -78,5 +92,21 @@ export class Readouts {
       el.classList.toggle("computing", mode === "computing");
       el.classList.toggle("invalid",   mode === "invalid");
     }
+  }
+
+  private armLong(): void {
+    this.cancelLong();
+    this.longTimer = window.setTimeout(() => {
+      for (const el of this.allValues()) el.classList.add("computing-long");
+      this.status.textContent = t({ en: "still computing…", ja: "計算中…" });
+    }, Readouts.LONG_DELAY_MS);
+  }
+
+  private cancelLong(): void {
+    if (this.longTimer !== null) {
+      clearTimeout(this.longTimer);
+      this.longTimer = null;
+    }
+    for (const el of this.allValues()) el.classList.remove("computing-long");
   }
 }

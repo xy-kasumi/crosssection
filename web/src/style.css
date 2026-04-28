@@ -257,6 +257,28 @@ main {
 }
 .readout-val.computing { opacity: 0.18; }
 .readout-val.invalid   { color: var(--danger); opacity: 0.85; }
+
+/* Long-computing: text fades out, an animated sine-wave mask reveals the
+   accent color in its place. Timed slow (1.6s/period) so it reads as
+   "thinking" rather than "loading spinner". */
+.readout-val.computing-long {
+  color: transparent;
+  background-color: var(--accent);
+  opacity: 0.55;
+  -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 14'><path d='M 0 7 Q 3 1 6 7 T 12 7 T 18 7 T 24 7' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'/></svg>");
+          mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 14'><path d='M 0 7 Q 3 1 6 7 T 12 7 T 18 7 T 24 7' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'/></svg>");
+  -webkit-mask-repeat: repeat-x;
+          mask-repeat: repeat-x;
+  -webkit-mask-size: 24px 100%;
+          mask-size: 24px 100%;
+  -webkit-mask-position: right center;
+          mask-position: right center;
+  animation: wave-scroll 1.6s linear infinite;
+}
+@keyframes wave-scroll {
+  from { -webkit-mask-position-x: 0;     mask-position-x: 0;     }
+  to   { -webkit-mask-position-x: -24px; mask-position-x: -24px; }
+}
 .readout-unit { font-family: var(--ff-mono); font-size: var(--fs-caption); opacity: 0.6; }
 
 .status {
