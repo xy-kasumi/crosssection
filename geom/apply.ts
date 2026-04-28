@@ -298,7 +298,21 @@ function moveVert(base: AuthoringShape, sel: Selection, index: number, target: V
   const ol = outlineForSel(base, sel);
   if (ol === null) return invalid(`move-vert: selection ${selDesc(sel)} has no editable outline`);
   if (index < 0 || index >= ol.length) return invalid(`move-vert: index ${index} out of range (length ${ol.length})`);
-  const newOl = ol.map((p, i) => (i === index ? { x: target.x, y: target.y } : { x: p.x, y: p.y }));
+  const n = ol.length;
+  const left = ol[(index - 1 + n) % n]!;
+  const right = ol[(index + 1) % n]!;
+  // Drop the dragged vertex when it lands on an adjacent neighbor — the
+  // user's gesture for merging two corners. Snap is uniform (editor-model
+  // invariant 6), so equality is exact when the cursor is over the neighbor.
+  const collapseLeft = target.x === left.x && target.y === left.y;
+  const collapseRight = target.x === right.x && target.y === right.y;
+  let newOl: Outline;
+  if (collapseLeft || collapseRight) {
+    if (n <= 3) return err({ tag: "breaks-polygon" });
+    newOl = ol.filter((_, i) => i !== index).map((p) => ({ x: p.x, y: p.y }));
+  } else {
+    newOl = ol.map((p, i) => (i === index ? { x: target.x, y: target.y } : { x: p.x, y: p.y }));
+  }
   const candidate = withOutlineReplaced(base, sel, newOl);
   if (!candidate) return invalid(`move-vert: failed to apply outline to selection ${selDesc(sel)}`);
   return finalize(candidate, sel, null);

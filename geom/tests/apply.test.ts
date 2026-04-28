@@ -68,6 +68,37 @@ test("rod-with-clean-hole → move-hole-center across boundary → warning + pol
   assert.equal(r.shape.kind, "polygon");
 });
 
+test("move-vert onto an adjacent neighbor → ok, vertex collapses (rect → triangle)", () => {
+  const rect = rectShapeOf(10, 10); // 4 corners
+  // Drag corner 0 onto corner 1.
+  const ol = (rect as { kind: "polygon"; outers: { x: number; y: number }[][] }).outers[0]!;
+  const target = ol[1]!;
+  const op: Op = { kind: "move-vert", sel: { kind: "outer", index: 0 }, index: 0, target };
+  const r = apply(rect, op);
+  assert.equal(r.kind, "ok");
+  if (r.kind !== "ok") return;
+  if (r.shape.kind !== "polygon") throw new Error("expected polygon");
+  assert.equal(r.shape.outers[0]!.length, 3);
+});
+
+test("move-vert onto an adjacent neighbor on a triangle → error (would leave 2 vertices)", () => {
+  const tri: AuthoringShape = {
+    kind: "polygon",
+    outers: [[
+      { x: 0, y: 0 }, { x: 10, y: 0 }, { x: 5, y: 10 },
+    ]],
+    holes: [],
+  };
+  const op: Op = {
+    kind: "move-vert", sel: { kind: "outer", index: 0 }, index: 0,
+    target: { x: 10, y: 0 },
+  };
+  const r = apply(tri, op);
+  assert.equal(r.kind, "error");
+  if (r.kind !== "error") return;
+  assert.equal(r.tag, "breaks-polygon");
+});
+
 test("move-vert with out-of-range index → invalid (UI bug, not user error)", () => {
   const rect = rectShapeOf(10, 20);
   const op: Op = { kind: "move-vert", sel: { kind: "outer", index: 0 }, index: 99, target: { x: 0, y: 0 } };
