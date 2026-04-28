@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="0" height="0" style="display:none">
+  <symbol id="sym-icon-mirror" viewBox="0 0 24 24">
+    <path d="M12 5 L19 12 L12 19 Z" fill="currentColor" opacity="0.85"/>
+    <path d="M12 5 L5 12 L12 19 Z" fill="currentColor" opacity="0.4"/>
+  </symbol>
+
+  <symbol id="sym-icon-extrusion" viewBox="0 0 24 24">
+    <path d="M10 3 H14 V10 H21 V14 H14 V21 H10 V14 H3 V10 H10 Z"
+          stroke="currentColor" stroke-width="1.5"
+          fill="currentColor" fill-opacity="0.18"
+          transform="rotate(45 12 12)"/>
+  </symbol>
+</svg>
