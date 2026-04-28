@@ -1,26 +1,19 @@
 // Centered grid: minor lines + major emphasis + axes + tick numbers + axis
-// labels. Engineering halfSpan ladder ({1,2,5} × 10^k) means the user sees
-// "5" / "10" / "20" rather than "13.7". Receives a View; emits CSS pixels.
+// labels. halfSpan fits the bbox continuously; the minor unit still snaps to
+// 10^k so tick labels stay clean (5 / 10 / 20, not 13.7). Receives a View;
+// emits CSS pixels.
 
 import { authoringBBox, type AuthoringShape } from "@geom/index.ts";
 import type { View } from "./index.ts";
 
-const FIT_MARGIN = 1.15; // halfSpan must be >= FIT_MARGIN * max abs world coord
-
-const ENG_SPANS: number[] = (() => {
-  const out: number[] = [];
-  for (let p = -3; p <= 4; p++) for (const m of [1, 2, 5]) out.push(m * Math.pow(10, p));
-  out.sort((a, b) => a - b);
-  return out;
-})();
+const FIT_MARGIN = 1.15; // halfSpan = FIT_MARGIN * max abs world coord
+const FALLBACK_HALFSPAN = 5; // when shape has no bbox (e.g. zero-area outline)
 
 export function targetHalfSpan(shape: AuthoringShape): number {
   const bbox = authoringBBox(shape);
-  if (!bbox) return 5;
+  if (!bbox) return FALLBACK_HALFSPAN;
   const m = Math.max(Math.abs(bbox.minX), Math.abs(bbox.maxX), Math.abs(bbox.minY), Math.abs(bbox.maxY));
-  const want = Math.max(0.05, m * FIT_MARGIN);
-  for (const s of ENG_SPANS) if (s >= want) return s;
-  return ENG_SPANS[ENG_SPANS.length - 1]!;
+  return Math.max(0.05, m * FIT_MARGIN);
 }
 
 export function unitForSpan(halfSpan: number): number {
@@ -59,9 +52,14 @@ export function drawGrid(ctx: CanvasRenderingContext2D, view: View): void {
   ctx.moveTo(0, offsetY); ctx.lineTo(cssW, offsetY);
   ctx.stroke();
 
-  // Tick numbers: every minor when there are no majors, every major otherwise.
+  // Tick numbers: label minors when they're sparse enough to read; otherwise
+  // fall back to majors. The "showMajor" toggle is purely visual (line
+  // emphasis) and a poor proxy for label density — e.g. minorN=6 enables
+  // majors but minor labels still fit fine. Cap targets the inner half of
+  // each axis (one side of origin) and counts both sides equally.
   // Skip 0 (axis intersection) and the outermost tick (overlaps the X/Y label).
-  const tickStep = showMajor ? majorEvery : 1;
+  const MAX_LABELS_PER_SIDE = 10;
+  const tickStep = minorN <= MAX_LABELS_PER_SIDE ? 1 : majorEvery;
   ctx.fillStyle = "rgba(80,80,80,0.7)";
   ctx.font = "10px ui-monospace, SFMono-Regular, monospace";
   for (let i = -minorN + 1; i <= minorN - 1; i++) {
