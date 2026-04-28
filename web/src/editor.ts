@@ -182,8 +182,7 @@ export class Editor {
       status = statusFromResult(r);
       if (r.kind === "ok" || r.kind === "warning") {
         displayShape = r.shape;
-        const c = compose(displayShape);
-        displayComposed = c.ok ? c.shape : null;
+        displayComposed = compose(displayShape);
       }
     }
     this.updateStatus(status);

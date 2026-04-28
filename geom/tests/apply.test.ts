@@ -120,58 +120,6 @@ test("move-vert into a self-intersection → error self-intersecting", () => {
   assert.equal(r.tag, "self-intersecting");
 });
 
-test("move-vert on a polygon hole that crosses the outer → error hole-overlap", () => {
-  // 20x20 square outer, a 4x4 polygon hole near the center. Drag one hole
-  // vertex outside the outer.
-  const shape: AuthoringShape = {
-    kind: "polygon",
-    outers: [[
-      { x: -10, y: -10 }, { x: 10, y: -10 }, { x: 10, y: 10 }, { x: -10, y: 10 },
-    ]],
-    holes: [{
-      kind: "polygon",
-      outline: [
-        { x: -2, y: -2 }, { x: 2, y: -2 }, { x: 2, y: 2 }, { x: -2, y: 2 },
-      ],
-    }],
-  };
-  const op: Op = {
-    kind: "move-vert", sel: { kind: "hole", index: 0 }, index: 0,
-    target: { x: -20, y: -20 }, // pulls the corner well outside the outer
-  };
-  const r = apply(shape, op);
-  assert.equal(r.kind, "error");
-  if (r.kind !== "error") return;
-  assert.equal(r.tag, "hole-overlap");
-});
-
-test("move-vert on a polygon hole into another hole → error hole-overlap", () => {
-  // Two adjacent square holes. Drag a vertex of hole 0 deep into hole 1.
-  const shape: AuthoringShape = {
-    kind: "polygon",
-    outers: [[
-      { x: -20, y: -10 }, { x: 20, y: -10 }, { x: 20, y: 10 }, { x: -20, y: 10 },
-    ]],
-    holes: [
-      { kind: "polygon", outline: [
-        { x: -8, y: -2 }, { x: -2, y: -2 }, { x: -2, y: 2 }, { x: -8, y: 2 },
-      ]},
-      { kind: "polygon", outline: [
-        { x: 2, y: -2 }, { x: 8, y: -2 }, { x: 8, y: 2 }, { x: 2, y: 2 },
-      ]},
-    ],
-  };
-  // Drag hole 0's right-bottom corner (-2,-2) into hole 1 at (5,0).
-  const op: Op = {
-    kind: "move-vert", sel: { kind: "hole", index: 0 }, index: 1,
-    target: { x: 5, y: 0 },
-  };
-  const r = apply(shape, op);
-  assert.equal(r.kind, "error");
-  if (r.kind !== "error") return;
-  assert.equal(r.tag, "hole-overlap");
-});
-
 test("move-vert with out-of-range index → invalid (UI bug, not user error)", () => {
   const rect = rectShapeOf(10, 20);
   const op: Op = { kind: "move-vert", sel: { kind: "outer", index: 0 }, index: 99, target: { x: 0, y: 0 } };

@@ -12,7 +12,6 @@ import { CanvasStatus } from "./ui/canvas-status.ts";
 import { DebugPane } from "./ui/debug-pane.ts";
 import { ZeroState } from "./ui/zero-state.ts";
 import { toWire } from "@solver/shape.ts";
-import { errorText } from "./error-text.ts";
 
 // Top-level error trap. The geom kernel surfaces unreachable-from-sound-UI
 // states ("invalid" Op results) by having editor.ts throw; the throw lands
@@ -91,14 +90,10 @@ const core = new SolverClient({
 let solveTimer: number | null = null;
 function recompute(): void {
   if (zeroState.isActive()) return;
-  // Recompose immediately so the canvas mirrors current state.
-  const result = compose(editor.getShape());
-  if (!result.ok) {
-    editor.setComposed(null);
-    readouts.setInvalid(`invalid: ${errorText(result)}`);
-    return;
-  }
-  editor.setComposed(result.shape);
+  // Editor's shape is always check-valid (apply() maintains the contract);
+  // compose is a pure translation here.
+  const composed = compose(editor.getShape());
+  editor.setComposed(composed);
   if (!core.isReady()) return;
 
   // Debounce — drag emits many events per frame.
@@ -108,11 +103,11 @@ function recompute(): void {
     const id = nextId++;
     readouts.setComputing(true);
     let maxExtent = 0;
-    for (const ring of result.shape) for (const p of ring) {
+    for (const ring of composed) for (const p of ring) {
       maxExtent = Math.max(maxExtent, Math.abs(p.x), Math.abs(p.y));
     }
     const meshSize = Math.max(0.05, maxExtent / 10);
-    core.solve(id, toWire(result.shape), meshSize);
+    core.solve(id, toWire(composed), meshSize);
   }, 80);
 }
 

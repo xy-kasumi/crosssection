@@ -54,8 +54,7 @@ export class ZeroState {
 function buildDemoEntries(): DemoEntry[] {
   const out: DemoEntry[] = [];
   const push = (auth: AuthoringShape, ix: number, iy: number, j: number): void => {
-    const r = compose(auth);
-    if (r.ok) out.push({ shape: r.shape, ix, iy, j });
+    out.push({ shape: compose(auth), ix, iy, j });
   };
 
   // 1. Solid rod, D = 8 mm. Ix = Iy = πD⁴/64; J = 2 Ix.
