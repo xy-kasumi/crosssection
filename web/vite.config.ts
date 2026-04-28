@@ -32,5 +32,23 @@ export default defineConfig(({ command }) => ({
   },
   worker: {
     format: "es",
+    rollupOptions: {
+      output: { assetFileNames: keepWheelsUnhashed },
+    },
+  },
+  build: {
+    rollupOptions: {
+      output: { assetFileNames: keepWheelsUnhashed },
+    },
   },
 }));
+
+// Python wheel filenames are parsed per PEP 427 (name-version-...-tag.whl).
+// Vite's content-hash suffix corrupts that ("cp312" gets misread as the
+// build-number field), so micropip refuses to install. Keep .whl pristine;
+// hash everything else as usual.
+function keepWheelsUnhashed(info: { names?: string[]; name?: string }): string {
+  const name = info.names?.[0] ?? info.name ?? "";
+  if (name.endsWith(".whl")) return "assets/[name][extname]";
+  return "assets/[name]-[hash][extname]";
+}
