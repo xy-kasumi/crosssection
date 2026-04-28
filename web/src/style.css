@@ -255,6 +255,34 @@ main {
 }
 .status.invalid #status { color: var(--danger); opacity: 1; }
 
+/* Footer language toggle. The ↗ glyph + target-language label signal "this
+   navigates" rather than "this toggles in place" — clicking reloads the
+   page (see ui/i18n.ts setLang). Visually quiet to keep it out of the
+   primary editing flow. */
+.lang-switch {
+  display: flex;
+  justify-content: center;
+  margin-top: auto;
+  padding-top: var(--gap-snug);
+}
+.lang-switch-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--gap-tight);
+  padding: var(--gap-tight) var(--gap-snug);
+  background: transparent;
+  border: 0;
+  font: inherit;
+  font-size: var(--fs-meta);
+  color: inherit;
+  opacity: 0.55;
+  cursor: pointer;
+  border-radius: var(--radius-surface);
+  transition: opacity 0.15s, background 0.15s;
+}
+.lang-switch-btn:hover { opacity: 1; background: var(--surface-muted); }
+.lang-switch-glyph { font-size: 0.9em; opacity: 0.8; }
+
 /* ---------- canvas column: toolbar + canvas + size-input overlay ---------- */
 
 .canvas-col {

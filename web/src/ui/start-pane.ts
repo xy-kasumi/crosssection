@@ -10,6 +10,7 @@
 
 import { boxOf, extrusionOf, pipeOf, rectShapeOf, rodOf } from "@geom/index.ts";
 import type { Editor } from "../editor.ts";
+import { t } from "./i18n.ts";
 
 type Preset = "rod" | "pipe" | "rect" | "box" | "extrusion";
 type FieldDef = { name: string; label: string; min: number; step: number };
@@ -70,7 +71,10 @@ export class StartPane {
     for (const btn of document.querySelectorAll<HTMLButtonElement>(".start-btn")) {
       btn.addEventListener("click", () => {
         const preset = btn.dataset.preset as Preset;
-        if (this.userModified && !confirm("Replace current shape?")) return;
+        if (this.userModified && !confirm(t({
+          en: "Replace current shape?",
+          ja: "現在の形状を置き換えますか？",
+        }))) return;
         if (!this.firstPresetPicked) {
           this.firstPresetPicked = true;
           this.onFirstPreset?.();
@@ -135,7 +139,7 @@ export class StartPane {
     }
     const hint = document.createElement("span");
     hint.className = "hint";
-    hint.textContent = "Enter to confirm";
+    hint.textContent = t({ en: "Enter to confirm", ja: "Enterで確定" });
     form.appendChild(hint);
 
     const apply = (): void => {

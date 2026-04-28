@@ -12,6 +12,12 @@ import { Toolbar } from "./ui/toolbar.ts";
 import { CanvasStatus } from "./ui/canvas-status.ts";
 import { ZeroState } from "./ui/zero-state.ts";
 import { toWire } from "@solver/shape.ts";
+import { t } from "./ui/i18n.ts";
+import { applyStaticLabels } from "./ui/i18n-static.ts";
+import { mountLangSwitch } from "./ui/lang-switch.ts";
+
+applyStaticLabels();
+mountLangSwitch();
 
 // Top-level error trap. The geom kernel surfaces unreachable-from-sound-UI
 // states ("invalid" Op results) by having editor.ts throw; the throw lands
@@ -29,12 +35,23 @@ function showFatalOverlay(summary: string, detail: unknown): void {
   const detailText = detail instanceof Error
     ? `${detail.name}: ${detail.message}\n${detail.stack ?? ""}`
     : String(detail ?? summary);
+  const msg = t({ en: "Something went wrong.", ja: "予期しないエラーが発生しました。" });
+  const desc = t({
+    en: "The editor hit an unexpected internal state. Reload to start fresh — your unsaved geometry will be lost.",
+    ja: "エディタが不正な状態になりました。リロードしてやり直してください — 保存していない形状は失われます。",
+  });
+  const reloadLabel = t({ en: "Reload", ja: "リロード" });
+  const detailsLabel = t({ en: "Details", ja: "詳細" });
   card.innerHTML = `
-    <div class="boot-msg">Something went wrong.</div>
-    <p>The editor hit an unexpected internal state. Reload to start fresh — your unsaved geometry will be lost.</p>
-    <button id="boot-reload" type="button">Reload</button>
-    <details><summary>Details</summary><pre id="boot-error-text"></pre></details>
+    <div class="boot-msg"></div>
+    <p></p>
+    <button id="boot-reload" type="button"></button>
+    <details><summary></summary><pre id="boot-error-text"></pre></details>
   `;
+  card.querySelector(".boot-msg")!.textContent = msg;
+  card.querySelector("p")!.textContent = desc;
+  card.querySelector("#boot-reload")!.textContent = reloadLabel;
+  card.querySelector("summary")!.textContent = detailsLabel;
   const errEl = document.getElementById("boot-error-text");
   if (errEl) errEl.textContent = detailText;
   document.getElementById("boot-reload")?.addEventListener("click", () => location.reload());
@@ -77,14 +94,17 @@ const core = new SolverClient({
     lastDisplayedId = id;
     readouts.setComputed(
       result.area, result.ixx_c, result.iyy_c, result.j,
-      `${result.n_elems.toLocaleString()} elems FEM`,
+      t({
+        en: `${result.n_elems.toLocaleString()} elems FEM`,
+        ja: `${result.n_elems.toLocaleString()}要素 FEM`,
+      }),
     );
   },
   onError: (_id, err) => {
     if (zeroState.isActive()) return;
     // Solver tracebacks are long. Show "solver error" in the readout strip
     // and dump the full message to the devtools console for debugging.
-    readouts.setInvalid("solver error");
+    readouts.setInvalid(t({ en: "solver error", ja: "ソルバーエラー" }));
     console.error("[solver]", err);
   },
 });

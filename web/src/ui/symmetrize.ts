@@ -2,6 +2,7 @@
 // kernel owns the actual regions/transforms.
 
 import type { SymGroup } from "@geom/index.ts";
+import { t } from "./i18n.ts";
 
 export interface SymSpec {
   kind: SymGroup;
@@ -9,6 +10,6 @@ export interface SymSpec {
 }
 
 export const SYM_SPECS: SymSpec[] = [
-  { kind: "D1", label: "Mirror" },
-  { kind: "D4", label: "Extrusion" },
+  { kind: "D1", label: t({ en: "Mirror",    ja: "ミラー" }) },
+  { kind: "D4", label: t({ en: "Extrusion", ja: "押出" }) },
 ];

@@ -9,6 +9,7 @@
 // Owns one DOM node; toolbar.ts no longer carries hint state.
 
 import type { ToolState, ToolStatus } from "../editor.ts";
+import { t } from "./i18n.ts";
 
 export class CanvasStatus {
   private readonly el: HTMLElement;
@@ -58,11 +59,17 @@ export class CanvasStatus {
 
 function defaultHint(state: ToolState): Node[] {
   const action = state.phase === "wait-anchor"
-    ? (state.kind === "add-hole" ? "center"           : "first corner")
-    : (state.kind === "add-hole" ? "circumference"    : "opposite corner");
+    ? (state.kind === "add-hole"
+        ? t({ en: "center",         ja: "中心" })
+        : t({ en: "first corner",   ja: "始点" }))
+    : (state.kind === "add-hole"
+        ? t({ en: "circumference",  ja: "円周" })
+        : t({ en: "opposite corner", ja: "対角" }));
   return [
-    kbd("Click"), text(` ${action}  ·  `),
-    kbd("Esc"), text("/"), kbd("R-Click"), text(" cancel"),
+    kbd(t({ en: "Click", ja: "クリック" })),
+    text(` ${action}  ·  `),
+    kbd("Esc"), text("/"), kbd("R-Click"),
+    text(t({ en: " cancel", ja: " キャンセル" })),
   ];
 }
 
