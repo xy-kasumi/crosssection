@@ -38,5 +38,10 @@ export function errorText(e: ErrorTag): string {
       return t({ en: "hole must not overlap outer or another hole",       ja: "穴が外形または他の穴と重なってはいけません" });
     case "outers-overlap":
       return t({ en: "outlines must not overlap each other",              ja: "外形どうしが重なってはいけません" });
+    case "degenerate-shape":
+      return t({
+        en: "shape would degenerate beyond the geometry engine's precision",
+        ja: "形状が精度限界を下回ります",
+      });
   }
 }

@@ -22,7 +22,7 @@ import {
   decompose, outerMultiPolygonOf, outlineToRing, quantize, ringFromCircle,
 } from "./internal.ts";
 import { normalize } from "./apply.ts";
-import { check } from "./shape.ts";
+import { check, isPolygonClippingFailure } from "./shape.ts";
 import type {
   AuthoringShape, ErrorTag, Hole, Outline, WarnTag,
 } from "./shape.ts";
@@ -195,15 +195,20 @@ function isAlreadySymmetric(s: AuthoringShape, group: SymGroup): boolean {
 }
 
 export function symCompose(s: AuthoringShape, group: SymGroup): SymComposeResult {
-  if (isAlreadySymmetric(s, group)) return { kind: "ok", shape: s };
+  try {
+    if (isAlreadySymmetric(s, group)) return { kind: "ok", shape: s };
 
-  const raw = orbitEmit(s, group);
-  if (raw === null) return { kind: "error", tag: "empties-shape" };
-  const n = normalize(raw, null);
-  const err = check(n.shape);
-  if (err) return { kind: "error", ...err };
-  if (n.warning) return { kind: "warning", shape: n.shape, ...n.warning };
-  return { kind: "ok", shape: n.shape };
+    const raw = orbitEmit(s, group);
+    if (raw === null) return { kind: "error", tag: "empties-shape" };
+    const n = normalize(raw, null);
+    const err = check(n.shape);
+    if (err) return { kind: "error", ...err };
+    if (n.warning) return { kind: "warning", shape: n.shape, ...n.warning };
+    return { kind: "ok", shape: n.shape };
+  } catch (e) {
+    if (isPolygonClippingFailure(e)) return { kind: "error", tag: "degenerate-shape" };
+    throw e;
+  }
 }
 
 // Polygons covering the *non*-canonical area within ±B. UI-side dim overlay

@@ -14,7 +14,7 @@ import {
   decompose, holeMP, holesMultiPolygon, outerMultiPolygonOf,
   outlineToRing, quantize, quantizeVec,
 } from "./internal.ts";
-import { check } from "./shape.ts";
+import { check, isPolygonClippingFailure } from "./shape.ts";
 import type {
   AuthoringShape, ErrorTag, Hole, Outline, Selection, Vec2, WarnTag,
 } from "./shape.ts";
@@ -30,14 +30,19 @@ interface Built { shape: AuthoringShape; preselect: Selection | null; warning: W
 type BuildResult = Built | { reason: string };
 
 export function apply(base: AuthoringShape, op: Op): ApplyResult {
-  const r = build(base, qOp(op));
-  if ("reason" in r) return { kind: "invalid", reason: r.reason };
-  const n = normalize(r.shape, r.preselect);
-  const err = check(n.shape);
-  if (err) return { kind: "error", ...err };
-  const warning = r.warning ?? n.warning;
-  if (warning) return { kind: "warning", shape: n.shape, preselect: n.preselect, ...warning };
-  return { kind: "ok", shape: n.shape, preselect: n.preselect };
+  try {
+    const r = build(base, qOp(op));
+    if ("reason" in r) return { kind: "invalid", reason: r.reason };
+    const n = normalize(r.shape, r.preselect);
+    const err = check(n.shape);
+    if (err) return { kind: "error", ...err };
+    const warning = r.warning ?? n.warning;
+    if (warning) return { kind: "warning", shape: n.shape, preselect: n.preselect, ...warning };
+    return { kind: "ok", shape: n.shape, preselect: n.preselect };
+  } catch (e) {
+    if (isPolygonClippingFailure(e)) return { kind: "error", tag: "degenerate-shape" };
+    throw e;
+  }
 }
 
 // Quantize all coord-bearing op fields at the boundary. After this every

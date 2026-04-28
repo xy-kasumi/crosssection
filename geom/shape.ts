@@ -45,7 +45,12 @@ export type ErrorTag =
   | { tag: "self-intersecting"; outerIndex?: number; holeIndex?: number }
   | { tag: "breaks-polygon";    holeIndex?: number }
   | { tag: "hole-overlap";      holeIndex?: number }
-  | { tag: "outers-overlap" };
+  | { tag: "outers-overlap" }
+  // External polygon-clipping rejected the input as a degenerate
+  // Polygon/MultiPolygon — sub-precision-floor edges, coincident points
+  // after quantization, etc. Surfaced as a soft error rather than a throw
+  // so the editor doesn't fault. See `isPolygonClippingFailure` below.
+  | { tag: "degenerate-shape" };
 
 // Each warn says "we lost something to make this op fit the contract".
 export type WarnTag =
@@ -54,7 +59,24 @@ export type WarnTag =
 
 export interface BBox { minX: number; minY: number; maxX: number; maxY: number }
 
+// Catches throws from the external polygon-clipping library (sub-precision
+// edges, coincident points it considers ill-formed) and converts them into
+// `degenerate-shape` errors so the kernel's never-throw contract holds.
+// Stack-based detection — message text is more brittle across versions.
+export function isPolygonClippingFailure(e: unknown): boolean {
+  return e instanceof Error && (e.stack ?? "").includes("polygon-clipping");
+}
+
 export function check(s: AuthoringShape): ErrorTag | null {
+  try {
+    return checkInner(s);
+  } catch (e) {
+    if (isPolygonClippingFailure(e)) return { tag: "degenerate-shape" };
+    throw e;
+  }
+}
+
+function checkInner(s: AuthoringShape): ErrorTag | null {
   // 1. Outline simplicity & vertex count.
   if (s.kind === "polygon") {
     if (s.outers.length === 0) return { tag: "empties-shape" };
