@@ -1,19 +1,24 @@
 # crosssection
 
-In-browser calculator for 2D cross-section properties: **Iₓ**, **Iᵧ** (second moments of area) and **J** (St. Venant torsional constant). Static, local-only SPA; the heavy lifting is `sectionproperties` (Python) running in Pyodide.
+Use at: https://xy-kasumi.github.io/crosssection
 
-## Status
+![Screenshot](./screenshot.png)
 
-- **Core compute + CLI test battery**: working. `./test.sh` runs five preset shapes through the Pyodide solver; expected values cite external references (closed forms, Roark, Timoshenko & Goodier) — no self-computed regression baselines.
-- **Browser UI** (`web/`): direct-manipulation editor with rod/rectangle/extrusion presets, Paint/Erase/Add-Hole tools, snap-to-grid, and an animated zero-state landing that hides Pyodide boot time behind a closed-form-numbers carousel. Three readouts (Iₓ, Iᵧ, J) update on every edit. Editor mental model + op trichotomy: see [`editor-model.md`](editor-model.md).
+In-browser calculator for 2D cross-section properties, including:
+* **A**: area
+* **Iₓ**, **Iᵧ** ([second moments of area](https://en.wikipedia.org/wiki/Second_moment_of_area))
+* **J** ([torsional constant](https://en.wikipedia.org/wiki/Torsion_constant)).
 
-## Layout
+Static, local-only SPA; the heavy lifting is `sectionproperties` (Python) running in Pyodide.
+
+## File Layout
 
 Three self-contained modules. Each owns its own `package.json` and tests; per-module READMEs cover internals.
+See [`editor-model.md`](editor-model.md) to how geom & web work together as an editor.
 
-- **`solver/`** — Pyodide+sectionproperties FEM kernel. Browser entry is `SolverClient` (Web Worker RPC); Node entry is `compute()`. Includes the cytriangle wheel-build recipe.
-- **`geom/`** — Pure, immutable geometry kernel for the editor. No DOM, no Pyodide. `apply(shape, op)` is the only mutation surface.
-- **`web/`** — Browser UI, Vite-bundled. Composes `solver` + `geom`. Deletable without breaking the rest.
+- **`solver/`** — Pyodide+sectionproperties FEM kernel. Includes the cytriangle wheel-build recipe.
+- **`geom/`** — Pure, immutable geometry kernel for the editor. `apply(shape, op)` is the only mutation surface.
+- **`web/`** — Browser UI, Vite-bundled. Composes `solver` + `geom`.
 
 ```mermaid
 flowchart LR
