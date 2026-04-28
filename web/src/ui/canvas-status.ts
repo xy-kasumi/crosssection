@@ -2,7 +2,7 @@
 // what the in-flight tool is doing or why it would refuse to commit.
 //
 // Three levels:
-//   valid    — gray hint ("Click first corner") or empty
+//   valid    — gray hint (kbd-chip "[Click] center · [Esc]/[R-Click] cancel") or empty
 //   warning  — amber, committable; user-facing consequence (loss of circle)
 //   error    — red, would-be discarded on commit
 //
@@ -43,18 +43,36 @@ export class CanvasStatus {
       return;
     }
     // Valid: explicit message wins; otherwise fall back to the tool's
-    // default hint ("Click first corner" etc.). No tool active → blank.
+    // default hint. No tool active → blank.
     if (this.status.message) {
       this.el.textContent = this.status.message;
       return;
     }
-    this.el.textContent = this.toolState ? defaultHint(this.toolState) : "";
+    if (this.toolState) {
+      this.el.replaceChildren(...defaultHint(this.toolState));
+    } else {
+      this.el.textContent = "";
+    }
   }
 }
 
-function defaultHint(state: ToolState): string {
-  if (state.phase === "wait-anchor") {
-    return state.kind === "add-hole" ? "Click center" : "Click first corner";
-  }
-  return state.kind === "add-hole" ? "Click circumference" : "Click opposite corner";
+function defaultHint(state: ToolState): Node[] {
+  const action = state.phase === "wait-anchor"
+    ? (state.kind === "add-hole" ? "center"           : "first corner")
+    : (state.kind === "add-hole" ? "circumference"    : "opposite corner");
+  return [
+    kbd("Click"), text(` ${action}  ·  `),
+    kbd("Esc"), text("/"), kbd("R-Click"), text(" cancel"),
+  ];
+}
+
+function kbd(label: string): HTMLElement {
+  const el = document.createElement("kbd");
+  el.className = "kbd-hint";
+  el.textContent = label;
+  return el;
+}
+
+function text(s: string): Text {
+  return document.createTextNode(s);
 }

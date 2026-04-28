@@ -43,7 +43,6 @@ export type ToolStatus =
 
 export interface EditorCallbacks {
   onChange(): void;
-  onSelectionChange(sel: Selection | null): void;
   onToolChange?(state: ToolState | null): void;
   // Fires when the in-flight op's validity changes. The host renders this
   // in the canvas-status strip.
@@ -110,7 +109,6 @@ export class Editor {
   setShape(s: AuthoringShape, opts: { refit?: boolean } = {}): void {
     this.shape = s;
     this.selection = null;
-    this.cb.onSelectionChange(null);
     if (opts.refit !== false) this.refit();
     else this.render();
     this.cb.onChange();
@@ -124,7 +122,6 @@ export class Editor {
   getSelection(): Selection | null { return this.selection; }
   setSelection(sel: Selection | null): void {
     this.selection = sel;
-    this.cb.onSelectionChange(sel);
     this.render();
   }
 
@@ -135,7 +132,6 @@ export class Editor {
     } else {
       this.tool = { kind, anchor: null };
       this.selection = null;
-      this.cb.onSelectionChange(null);
     }
     this.cb.onToolChange?.(this.toolStateForCb());
     this.render();
@@ -285,7 +281,6 @@ export class Editor {
       if (result.kind === "ok" || result.kind === "warning") {
         this.shape = result.shape;
         this.selection = result.preselect ?? null;
-        this.cb.onSelectionChange(this.selection);
         this.cb.onChange();
         this.refit();
       }
@@ -342,11 +337,7 @@ export class Editor {
       // Commit the candidate. preselect from the result wins; otherwise
       // keep whatever the user had selected before the drag started.
       this.shape = r.shape;
-      const newSel = r.preselect ?? this.selection;
-      if (!sameSelectionOrNull(this.selection, newSel)) {
-        this.selection = newSel;
-        this.cb.onSelectionChange(this.selection);
-      }
+      this.selection = r.preselect ?? this.selection;
       this.cb.onChange();
     }
     // r === null (cursor moved within snap cell, never produced a frame),
@@ -443,17 +434,6 @@ export class Editor {
     }
     return null;
   }
-}
-
-function sameSelection(a: Selection, b: Selection): boolean {
-  if (a.kind !== b.kind) return false;
-  if (a.kind === "disk" || b.kind === "disk") return a.kind === b.kind;
-  return (a as { index: number }).index === (b as { index: number }).index;
-}
-
-function sameSelectionOrNull(a: Selection | null, b: Selection | null): boolean {
-  if (a === null || b === null) return a === b;
-  return sameSelection(a, b);
 }
 
 function makeToolOp(kind: ToolKind, anchor: Vec2, cursor: Vec2): Op {

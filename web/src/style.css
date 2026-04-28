@@ -15,7 +15,7 @@
 
   /* radii */
   --radius-control: 4px;   /* small interactive: buttons, inputs, tags, list items */
-  --radius-card:    6px;   /* cards: readouts, prim-list, size-input overlay, start buttons */
+  --radius-card:    6px;   /* cards: readouts, size-input overlay, start buttons */
   --radius-surface: 8px;   /* large surfaces: canvas frame, canvas toolbar, boot card */
 
   /* type — by role, not size */
@@ -51,12 +51,12 @@
 /* ---------- shared primitives ---------- */
 
 .card {
-  /* Bordered surface used by readouts, prim-list, etc. */
+  /* Bordered surface used by readouts, etc. */
   border: 1px solid var(--border);
   border-radius: var(--radius-card);
 }
 .uppercase-header {
-  /* Small uppercase headers (section-toggle, prim-list h3). */
+  /* Small uppercase headers (section-toggle). */
   font-size: var(--fs-caption);
   font-weight: 600;
   letter-spacing: 0.04em;
@@ -67,7 +67,7 @@ body { margin: 0; padding: 0; min-height: 100vh; }
 
 main {
   display: grid;
-  grid-template-columns: 220px minmax(320px, 1fr) 240px;
+  grid-template-columns: 220px minmax(320px, 1fr);
   gap: var(--pad-page);
   padding: var(--pad-page);
   align-items: stretch;
@@ -235,7 +235,6 @@ main {
   gap: var(--gap-tight);
   min-height: 1em;
 }
-.status .hint { font-size: var(--fs-meta); opacity: 0.7; line-height: 1.4; }
 .status.invalid #status { color: var(--danger); opacity: 1; }
 
 /* ---------- canvas column: toolbar + canvas + size-input overlay ---------- */
@@ -402,73 +401,10 @@ canvas {
   .canvas-status.warning { color: #e0a040; }
 }
 
-/* ---------- right column: debug panel ---------- */
-
-.panel { display: flex; flex-direction: column; gap: var(--gap-section); }
-
-.prim-list {
-  border: 1px solid var(--border);
-  border-radius: var(--radius-card);
-  padding: var(--gap-snug) var(--gap-cozy);
-}
-.prim-list h3 {
-  margin: 0 0 6px 0;
-  font-size: var(--fs-caption);
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  opacity: 0.6;
-}
-.prim-list h3 .debug-tag {
-  font-size: 10px;
-  font-weight: 500;
-  letter-spacing: 0.06em;
-  margin-left: var(--gap-tight);
-  padding: 1px 5px;
-  border: 1px solid currentColor;
-  border-radius: var(--radius-control);
-  opacity: 0.7;
-  vertical-align: 1px;
-}
-.prim-list ul {
-  list-style: none; margin: 0; padding: 0;
-  display: flex; flex-direction: column; gap: 2px;
-}
-.prim-list li {
-  display: flex;
-  align-items: center;
-  gap: var(--gap-snug);
-  padding: var(--gap-tight) 6px;
-  border-radius: var(--radius-control);
-  font-size: var(--fs-ui);
-  cursor: pointer;
-}
-.prim-list li:hover     { background: var(--hover-tint); }
-.prim-list li.selected  { background: var(--accent-tint-soft); }
-.prim-list li .prim-tag {
-  font-family: ui-monospace, SFMono-Regular, monospace;
-  font-size: var(--fs-meta);
-  opacity: 0.6;
-  min-width: 32px;
-}
-.prim-list li .prim-desc { flex: 1; font-variant-numeric: tabular-nums; }
-.prim-list li .prim-del {
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  font-size: var(--fs-body);
-  opacity: 0.4;
-  padding: 0 var(--gap-tight);
-  font: inherit;
-}
-.prim-list li .prim-del:hover { opacity: 1; color: var(--danger); }
-
 /* ---------- zero-state landing ---------- */
-/* Hide the editing toolbar and the debug panel; keep Start from + readouts
-   visible (the readouts carousel in lockstep with the demo, so they're a
-   teaser, not noise). visibility:hidden so layout doesn't reflow when the
-   user picks a preset. */
+/* Hide the editing toolbar; keep Start from + readouts visible (the readouts
+   carousel in lockstep with the demo, so they're a teaser, not noise).
+   visibility:hidden so layout doesn't reflow when the user picks a preset. */
 body.zero-state .canvas-toolbar,
-body.zero-state .canvas-status,
-body.zero-state .panel       { visibility: hidden; }
-body.zero-state canvas       { cursor: default; }
+body.zero-state .canvas-status { visibility: hidden; }
+body.zero-state canvas         { cursor: default; }

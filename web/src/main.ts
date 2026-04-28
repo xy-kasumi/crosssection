@@ -1,6 +1,6 @@
-// Composition root. Wires the panels (start, toolbar, readouts, debug,
-// zero-state), the Editor, and the SolverClient. No DOM lookups, no UI
-// logic — those live in their respective modules.
+// Composition root. Wires the panels (start, toolbar, readouts, zero-state),
+// the Editor, and the SolverClient. No DOM lookups, no UI logic — those live
+// in their respective modules.
 
 import { compose, defaultDisk } from "@geom/index.ts";
 import { Editor } from "./editor.ts";
@@ -10,7 +10,6 @@ import { StartPane } from "./ui/start-pane.ts";
 import { SymmetrizePopup } from "./ui/symmetrize-popup.ts";
 import { Toolbar } from "./ui/toolbar.ts";
 import { CanvasStatus } from "./ui/canvas-status.ts";
-import { DebugPane } from "./ui/debug-pane.ts";
 import { ZeroState } from "./ui/zero-state.ts";
 import { toWire } from "@solver/shape.ts";
 
@@ -47,10 +46,8 @@ const canvas = document.getElementById("cv") as HTMLCanvasElement;
 const editor = new Editor(canvas, defaultDisk(), {
   onChange: () => {
     startPane.markUserModified();
-    debugPane.refresh();
     recompute();
   },
-  onSelectionChange: () => debugPane.refresh(),
   onToolChange: (state) => {
     toolbar.syncToolState(state);
     canvasStatus.setTool(state);
@@ -58,11 +55,14 @@ const editor = new Editor(canvas, defaultDisk(), {
   onToolStatus: (status) => canvasStatus.setStatus(status),
 });
 
+// Hidden hook for browser-automation tests and devtools poking.
+// Usage: (window as any).__editor.getShape()
+(window as Window & { __editor?: Editor }).__editor = editor;
+
 const readouts     = new Readouts();
 const startPane    = new StartPane({ editor, onFirstPreset: () => zeroState.exit() });
 const toolbar      = new Toolbar({ editor });
 const canvasStatus = new CanvasStatus();
-const debugPane    = new DebugPane(editor);
 const zeroState    = new ZeroState({ editor, readouts });
 new SymmetrizePopup({ editor, onStatus: (s) => canvasStatus.setStatus(s) });
 
@@ -113,6 +113,5 @@ function recompute(): void {
   }, 80);
 }
 
-debugPane.refresh();
 zeroState.start();
 recompute();
