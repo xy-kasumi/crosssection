@@ -1,4 +1,4 @@
-// Owns the Ix/Iy/J readout boxes plus the small status line below them.
+// Owns the A/Ix/Iy/J readout boxes plus the small status line below them.
 // All four states are mutually exclusive: blank, computing (last value
 // faded), computed (fresh value), invalid (error red). Callers don't poke
 // the DOM directly — they pick a state.
@@ -6,19 +6,22 @@
 import { twoSigFigs } from "../format.ts";
 
 export class Readouts {
+  private readonly area: HTMLElement;
   private readonly ix: HTMLElement;
   private readonly iy: HTMLElement;
   private readonly j: HTMLElement;
   private readonly status: HTMLElement;
 
   constructor() {
+    this.area = document.getElementById("area")!;
     this.ix = document.getElementById("ix")!;
     this.iy = document.getElementById("iy")!;
     this.j  = document.getElementById("j")!;
     this.status = document.getElementById("status")!;
   }
 
-  setComputed(ix: number, iy: number, j: number, statusText: string): void {
+  setComputed(area: number, ix: number, iy: number, j: number, statusText: string): void {
+    this.area.textContent = twoSigFigs(area);
     this.ix.textContent = twoSigFigs(ix);
     this.iy.textContent = twoSigFigs(iy);
     this.j.textContent  = twoSigFigs(j);
@@ -44,7 +47,8 @@ export class Readouts {
 
   // Display arbitrary precomputed values without tagging them as FEM-derived
   // (used by the zero-state demo, which carries closed-form numbers).
-  setDemo(ix: number, iy: number, j: number): void {
+  setDemo(area: number, ix: number, iy: number, j: number): void {
+    this.area.textContent = twoSigFigs(area);
     this.ix.textContent = twoSigFigs(ix);
     this.iy.textContent = twoSigFigs(iy);
     this.j.textContent  = twoSigFigs(j);
@@ -53,7 +57,7 @@ export class Readouts {
   }
 
   private *allValues(): Generator<HTMLElement> {
-    yield this.ix; yield this.iy; yield this.j;
+    yield this.area; yield this.ix; yield this.iy; yield this.j;
   }
 
   private setMode(mode: "computed" | "computing" | "invalid"): void {

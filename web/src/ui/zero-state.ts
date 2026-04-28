@@ -15,7 +15,7 @@ import type { SolverShape } from "@solver/shape.ts";
 import type { Editor } from "../editor.ts";
 import type { Readouts } from "./readouts.ts";
 
-type DemoEntry = { shape: SolverShape; ix: number; iy: number; j: number };
+type DemoEntry = { shape: SolverShape; area: number; ix: number; iy: number; j: number };
 
 export class ZeroState {
   private readonly editor: Editor;
@@ -36,7 +36,7 @@ export class ZeroState {
       (idx) => {
         const e = entries[idx];
         if (!e) return;
-        this.readouts.setDemo(e.ix, e.iy, e.j);
+        this.readouts.setDemo(e.area, e.ix, e.iy, e.j);
       },
     );
   }
@@ -53,24 +53,26 @@ export class ZeroState {
 
 function buildDemoEntries(): DemoEntry[] {
   const out: DemoEntry[] = [];
-  const push = (auth: AuthoringShape, ix: number, iy: number, j: number): void => {
-    out.push({ shape: compose(auth), ix, iy, j });
+  const push = (auth: AuthoringShape, area: number, ix: number, iy: number, j: number): void => {
+    out.push({ shape: compose(auth), area, ix, iy, j });
   };
 
-  // 1. Solid rod, D = 8 mm. Ix = Iy = πD⁴/64; J = 2 Ix.
+  // 1. Solid rod, D = 8 mm. A = πD²/4; Ix = Iy = πD⁴/64; J = 2 Ix.
   {
     const D = 8;
+    const A = Math.PI * D ** 2 / 4;
     const I = Math.PI * D ** 4 / 64;
-    push(rodOf(D), I, I, 2 * I);
+    push(rodOf(D), A, I, I, 2 * I);
   }
   // 2. Hollow rod, Do = 12, Di = 8 mm.
   {
     const Do = 12, Di = 8;
+    const A = Math.PI * (Do ** 2 - Di ** 2) / 4;
     const I = Math.PI * (Do ** 4 - Di ** 4) / 64;
     push(
       { kind: "disk", cx: 0, cy: 0, r: Do / 2,
         holes: [{ kind: "circle", cx: 0, cy: 0, r: Di / 2 }] },
-      I, I, 2 * I,
+      A, I, I, 2 * I,
     );
   }
   // 3. 5-point star, hand-authored (single tip up → Ix ≠ Iy). No closed
@@ -85,10 +87,10 @@ function buildDemoEntries(): DemoEntry[] {
       ]],
       holes: [],
     },
-    2900, 3400, 3100,
+    182, 2900, 3400, 3100,
   );
   // 4. 20×20 T-slot extrusion (hand-authored profile, see extrusionOf).
-  //    Ix, Iy, J are precomputed numeric constants for this fixed shape.
-  push(extrusionOf(), 7500, 7500, 810);
+  //    A, Ix, Iy, J are precomputed numeric constants for this fixed shape.
+  push(extrusionOf(), 181, 7500, 7500, 810);
   return out;
 }

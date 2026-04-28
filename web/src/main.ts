@@ -76,7 +76,7 @@ const core = new SolverClient({
     if (zeroState.isActive()) return;
     lastDisplayedId = id;
     readouts.setComputed(
-      result.ixx_c, result.iyy_c, result.j,
+      result.area, result.ixx_c, result.iyy_c, result.j,
       `${result.n_elems.toLocaleString()} elems FEM`,
     );
   },
