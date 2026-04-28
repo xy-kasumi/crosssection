@@ -2,20 +2,23 @@
 //
 //   1. Outer is non-empty and a single connected piece.
 //   2. Every outline (outers + polygon holes) has ≥3 vertices and is simple.
-//   3. (outer ∖ holes) is exactly one piece — i.e. the shape is composable.
+//   3. Holes lie inside the outer and are pairwise disjoint.
+//   4. Multiple outers are pairwise disjoint.
 //
-// Overlap among holes (or between a hole and the outer perim) is *not*
-// rejected by the contract: `compose` canonicalizes via boolean ops, so
-// overlap is geometrically equivalent to its union. Ops that create
-// overlap therefore return `ok` or `warning`, never `error`. (Stricter
-// no-overlap rule TBD; would require generic auto-merge in apply.)
+// `apply(s, op)` is closed over the contract: input valid → output valid,
+// or error. Where merging into a valid shape is possible (overlap, partial
+// cross), `apply` auto-converts via `normalize`; the warn signals what was
+// lost (circle identity; an outside hole that got dropped).
 //
 // `compose(s)` is a pure translation to SolverShape — never errors.
+//
+// All coords inside geom/ are exact multiples of 1µm (1/1000 mm); see
+// internal.ts for the quantization rules.
 
 import polygonClipping from "polygon-clipping";
 import type { Polygon as SolverPolygon, SolverShape } from "@solver/shape.ts";
 import {
-  holesMultiPolygon, outerMultiPolygonOf,
+  holeMP, holesMultiPolygon, outerMultiPolygonOf,
   outlineToRing, ringFromCircle, ringToOutline,
   selfIntersects,
 } from "./internal.ts";
@@ -36,24 +39,23 @@ export type Selection =
   | { kind: "disk" }
   | { kind: "hole"; index: number };
 
-// Each tag is a distinct violation of the AuthoringShape contract.
 export type ErrorTag =
   | { tag: "empties-shape" }
   | { tag: "disconnects-shape" }
   | { tag: "self-intersecting"; outerIndex?: number; holeIndex?: number }
-  | { tag: "breaks-polygon";    holeIndex?: number };
+  | { tag: "breaks-polygon";    holeIndex?: number }
+  | { tag: "hole-overlap";      holeIndex?: number }
+  | { tag: "outers-overlap" };
 
-// An auto-conversion `apply` performed to keep the result in-contract. Each
-// warn says "we lost something to make this work".
+// Each warn says "we lost something to make this op fit the contract".
 export type WarnTag =
   | { tag: "circle-lost" }
   | { tag: "hole-outside-shape"; holeIndex?: number };
 
 export interface BBox { minX: number; minY: number; maxX: number; maxY: number }
 
-// First contract violation in `s`, or null. The single source of truth for
-// "is this AuthoringShape valid?".
 export function check(s: AuthoringShape): ErrorTag | null {
+  // 1. Outline simplicity & vertex count.
   if (s.kind === "polygon") {
     if (s.outers.length === 0) return { tag: "empties-shape" };
     for (let i = 0; i < s.outers.length; i++) {
@@ -70,15 +72,39 @@ export function check(s: AuthoringShape): ErrorTag | null {
     if (h.outline.length < 3) return { tag: "breaks-polygon", holeIndex: i };
     if (selfIntersects(h.outline)) return { tag: "self-intersecting", holeIndex: i };
   }
-  // Composability: outer minus holes is exactly one piece. Catches every
-  // overlap/disconnect case without enumerating them.
-  const filled = polygonClipping.difference(outerMultiPolygonOf(s), holesMultiPolygon(s.holes));
+
+  // 2. Outers must be pairwise disjoint.
+  if (s.kind === "polygon" && s.outers.length > 1) {
+    for (let i = 0; i < s.outers.length; i++) {
+      for (let j = i + 1; j < s.outers.length; j++) {
+        if (polygonClipping.intersection([[outlineToRing(s.outers[i]!)]], [[outlineToRing(s.outers[j]!)]]).length > 0) {
+          return { tag: "outers-overlap" };
+        }
+      }
+    }
+  }
+
+  // 3. Holes must be inside the outer and pairwise disjoint.
+  const outerMP = outerMultiPolygonOf(s);
+  for (let i = 0; i < s.holes.length; i++) {
+    const mp = holeMP(s.holes[i]!);
+    if (polygonClipping.difference(mp, outerMP).length > 0) {
+      return { tag: "hole-overlap", holeIndex: i };
+    }
+    for (let j = 0; j < i; j++) {
+      if (polygonClipping.intersection(mp, holeMP(s.holes[j]!)).length > 0) {
+        return { tag: "hole-overlap", holeIndex: i };
+      }
+    }
+  }
+
+  // 4. Composability.
+  const filled = polygonClipping.difference(outerMP, holesMultiPolygon(s.holes));
   if (filled.length === 0) return { tag: "empties-shape" };
   if (filled.length > 1) return { tag: "disconnects-shape" };
   return null;
 }
 
-// Pure translation. Caller must have passed `check`; result is well-defined.
 export function compose(s: AuthoringShape): SolverShape {
   const filled = polygonClipping.difference(outerMultiPolygonOf(s), holesMultiPolygon(s.holes));
   return filled[0]!.map(ringToSolverPolygon);

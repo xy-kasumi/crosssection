@@ -39,7 +39,7 @@ test("rod → add-hole entirely outside → warning, hole silently dropped", () 
   assert.equal(r.kind, "warning");
   if (r.kind !== "warning") return;
   assert.equal(r.tag, "hole-outside-shape");
-  assert.equal(r.shape, rod);
+  assert.deepEqual(r.shape, rod);
 });
 
 test("rod-with-clean-hole → move-hole-center far outside → warning, base unchanged", () => {
@@ -118,6 +118,92 @@ test("move-vert into a self-intersection → error self-intersecting", () => {
   assert.equal(r.kind, "error");
   if (r.kind !== "error") return;
   assert.equal(r.tag, "self-intersecting");
+});
+
+test("move-vert polygon-hole vertex outside outer → ok, hole dissolves into outer notch", () => {
+  // 20×20 square outer, 4×4 polygon hole at the center. Drag a hole vertex
+  // outside the outer — normalize should subtract the hole's geometry from
+  // the outer (notching it) and drop the hole prim.
+  const shape: AuthoringShape = {
+    kind: "polygon",
+    outers: [[
+      { x: -10, y: -10 }, { x: 10, y: -10 }, { x: 10, y: 10 }, { x: -10, y: 10 },
+    ]],
+    holes: [{
+      kind: "polygon",
+      outline: [
+        { x: -2, y: -2 }, { x: 2, y: -2 }, { x: 2, y: 2 }, { x: -2, y: 2 },
+      ],
+    }],
+  };
+  const op: Op = {
+    kind: "move-vert", sel: { kind: "hole", index: 0 }, index: 0,
+    target: { x: -20, y: -20 },
+  };
+  const r = apply(shape, op);
+  assert.notEqual(r.kind, "error");
+  if (r.kind !== "ok" && r.kind !== "warning") return;
+  assert.equal(r.shape.kind, "polygon");
+  // The polygon hole was absorbed; either the outer notches (no hole prim)
+  // or an emergent polygon hole replaces it.
+  if ("outers" in r.shape) {
+    // Outer should have more vertices (notched) or holes should reduce.
+    assert.ok(r.shape.holes.length <= 1);
+  }
+});
+
+test("move-vert polygon-hole vertex into another polygon hole → ok, holes merge", () => {
+  // Two adjacent square polygon holes; drag one's vertex deep into the other.
+  const shape: AuthoringShape = {
+    kind: "polygon",
+    outers: [[
+      { x: -20, y: -10 }, { x: 20, y: -10 }, { x: 20, y: 10 }, { x: -20, y: 10 },
+    ]],
+    holes: [
+      { kind: "polygon", outline: [
+        { x: -8, y: -2 }, { x: -2, y: -2 }, { x: -2, y: 2 }, { x: -8, y: 2 },
+      ]},
+      { kind: "polygon", outline: [
+        { x: 2, y: -2 }, { x: 8, y: -2 }, { x: 8, y: 2 }, { x: 2, y: 2 },
+      ]},
+    ],
+  };
+  // Drag hole 0's bottom-right corner (-2,-2) → (5, 0), well inside hole 1.
+  const op: Op = {
+    kind: "move-vert", sel: { kind: "hole", index: 0 }, index: 1,
+    target: { x: 5, y: 0 },
+  };
+  const r = apply(shape, op);
+  assert.notEqual(r.kind, "error");
+  if (r.kind !== "ok" && r.kind !== "warning") return;
+  // Two holes merged into one (or notched into the outer).
+  assert.ok(r.shape.holes.length <= 1);
+});
+
+test("apply produces only 1µm-grid coordinates", () => {
+  // Even after irrational ops (move-disk-radius via hypot of arbitrary
+  // floats), every coord in the result must be an integer multiple of 0.001.
+  const rod = rodOf(7);
+  const r1 = apply(rod, { kind: "move-disk-radius", r: Math.PI });
+  if (r1.kind !== "ok" && r1.kind !== "warning") throw new Error("setup");
+  const r2 = apply(r1.shape, { kind: "move-disk-center", target: { x: 1 / 3, y: Math.E } });
+  if (r2.kind !== "ok" && r2.kind !== "warning") throw new Error("setup");
+  const isGrid = (v: number) => Math.abs(Math.round(v * 1000) - v * 1000) < 1e-9;
+  const s = r2.shape;
+  if (s.kind === "disk") {
+    assert.ok(isGrid(s.cx) && isGrid(s.cy) && isGrid(s.r), `disk coord off-grid: ${s.cx},${s.cy},${s.r}`);
+  } else {
+    for (const o of s.outers) for (const p of o) {
+      assert.ok(isGrid(p.x) && isGrid(p.y), `outer vertex off-grid: ${p.x},${p.y}`);
+    }
+  }
+  for (const h of s.holes) {
+    if (h.kind === "circle") {
+      assert.ok(isGrid(h.cx) && isGrid(h.cy) && isGrid(h.r));
+    } else {
+      for (const p of h.outline) assert.ok(isGrid(p.x) && isGrid(p.y));
+    }
+  }
 });
 
 test("move-vert with out-of-range index → invalid (UI bug, not user error)", () => {

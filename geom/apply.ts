@@ -1,13 +1,19 @@
 // apply(base, op) is the closure operator over AuthoringShape (see shape.ts
-// for the contract). Pattern: each builder returns Built (the candidate +
-// optional warn) or {reason} for invalid. The gate runs `check()` once and
-// converts violations to errors. Builders never fabricate errors themselves.
+// for the contract). Pipeline: build → normalize → check → wrap.
+//
+//   build      Each op produces a *raw* candidate (may have overlap).
+//              Returns Built (or {reason} for invalid).
+//   normalize  Polygonize-and-merge any overlap; drop fully-outside holes.
+//              Emits warn for circle-loss / hole-drop. The single auto-
+//              conversion engine: per-op merge logic stays trivial.
+//   check      Single error gate (shape.ts). Per-op code never fabricates errors.
 
 import polygonClipping, { type MultiPolygon } from "polygon-clipping";
 
 import {
-  holesMultiPolygon, outerMultiPolygonOf,
-  outlineToRing, ringFromCircle, ringToOutline,
+  holeMP, holesMultiPolygon, outerMultiPolygonOf,
+  outlineToRing, quantize, quantizeVec,
+  ringToOutline,
 } from "./internal.ts";
 import { check } from "./shape.ts";
 import type {
@@ -25,12 +31,30 @@ interface Built { shape: AuthoringShape; preselect: Selection | null; warning: W
 type BuildResult = Built | { reason: string };
 
 export function apply(base: AuthoringShape, op: Op): ApplyResult {
-  const r = build(base, op);
+  const r = build(base, qOp(op));
   if ("reason" in r) return { kind: "invalid", reason: r.reason };
-  const err = check(r.shape);
+  const n = normalize(r.shape, r.preselect);
+  const err = check(n.shape);
   if (err) return { kind: "error", ...err };
-  if (r.warning) return { kind: "warning", shape: r.shape, preselect: r.preselect, ...r.warning };
-  return { kind: "ok", shape: r.shape, preselect: r.preselect };
+  const warning = r.warning ?? n.warning;
+  if (warning) return { kind: "warning", shape: n.shape, preselect: n.preselect, ...warning };
+  return { kind: "ok", shape: n.shape, preselect: n.preselect };
+}
+
+// Quantize all coord-bearing op fields at the boundary. After this every
+// number that flows into a builder is on the 1µm grid.
+function qOp(op: Op): Op {
+  switch (op.kind) {
+    case "paint-rect":
+    case "erase-rect": return { ...op, anchor: quantizeVec(op.anchor), cursor: quantizeVec(op.cursor) };
+    case "add-hole":   return { ...op, center: quantizeVec(op.center), cursor: quantizeVec(op.cursor) };
+    case "move-vert":  return { ...op, target: quantizeVec(op.target) };
+    case "move-disk-center": return { ...op, target: quantizeVec(op.target) };
+    case "move-disk-radius": return { ...op, r: quantize(op.r) };
+    case "move-hole-center": return { ...op, target: quantizeVec(op.target) };
+    case "move-hole-radius": return { ...op, r: quantize(op.r) };
+    case "delete-vert": return op;
+  }
 }
 
 function build(base: AuthoringShape, op: Op): BuildResult {
@@ -47,6 +71,93 @@ function build(base: AuthoringShape, op: Op): BuildResult {
   }
 }
 
+// ----- normalize -----
+//
+// Take a raw candidate (may have overlap or out-of-bounds holes) and
+// produce a canonical, contract-valid shape. Walks each hole once, sorts
+// into {good, bad, dropped}, then re-derives the shape if anything moved.
+
+function normalize(s: AuthoringShape, preselect: Selection | null): {
+  shape: AuthoringShape; preselect: Selection | null; warning: WarnTag | null;
+} {
+  const outerMP = outerMultiPolygonOf(s);
+
+  const good: Hole[] = [];
+  const bad: Hole[] = [];
+  let droppedIdx: number | null = null;
+
+  for (let i = 0; i < s.holes.length; i++) {
+    const h = s.holes[i]!;
+    const mp = holeMP(h);
+    if (polygonClipping.intersection(mp, outerMP).length === 0) {
+      if (droppedIdx === null) droppedIdx = i;
+      continue;
+    }
+    if (polygonClipping.difference(mp, outerMP).length > 0) {
+      bad.push(h);
+      continue;
+    }
+    let overlapsOther = false;
+    for (let j = 0; j < s.holes.length; j++) {
+      if (i === j) continue;
+      if (polygonClipping.intersection(mp, holeMP(s.holes[j]!)).length > 0) {
+        overlapsOther = true;
+        break;
+      }
+    }
+    if (overlapsOther) bad.push(h); else good.push(h);
+  }
+
+  const outersDirty = s.kind === "polygon" && s.outers.length > 1
+    && outerMP.length < s.outers.length;
+
+  // Fast path: nothing to fix.
+  if (bad.length === 0 && droppedIdx === null && !outersDirty) {
+    return { shape: s, preselect, warning: null };
+  }
+
+  // Slow path: re-derive. Build the dirty region (bad holes ∪ outer
+  // self-overlaps) as a "bite" subtracted from the merged outer; the
+  // emergent shape becomes a polygon with `good` preserved as-is.
+  let warning: WarnTag | null = null;
+  if (droppedIdx !== null) warning = { tag: "hole-outside-shape", holeIndex: droppedIdx };
+
+  if (bad.length === 0 && !outersDirty) {
+    // Only drops to apply.
+    const shape: AuthoringShape = s.kind === "disk"
+      ? { ...s, holes: good }
+      : { kind: "polygon", outers: s.outers.map(cloneOutline), holes: good };
+    return { shape, preselect: remapPreselect(preselect, shape), warning };
+  }
+
+  const badMP = holesMultiPolygon(bad);
+  const filled = badMP.length > 0 ? polygonClipping.difference(outerMP, badMP) : outerMP;
+  const { outers, holes: emergent } = decompose(filled);
+  const shape: AuthoringShape = {
+    kind: "polygon",
+    outers,
+    holes: [...good, ...emergent],
+  };
+
+  // circle-lost fires whenever a circle prim's identity gets dissolved.
+  const circleLost = s.kind === "disk" || bad.some((h) => h.kind === "circle");
+  if (circleLost) warning = { tag: "circle-lost" };
+
+  return { shape, preselect: remapPreselect(preselect, shape), warning };
+}
+
+function remapPreselect(preselect: Selection | null, s: AuthoringShape): Selection | null {
+  if (!preselect) return null;
+  if (preselect.kind === "disk") return s.kind === "disk" ? preselect : { kind: "outer", index: 0 };
+  if (preselect.kind === "outer") {
+    if (s.kind === "polygon" && preselect.index < s.outers.length) return preselect;
+    return s.kind === "polygon" ? { kind: "outer", index: 0 } : null;
+  }
+  if (preselect.index < s.holes.length) return preselect;
+  if (s.holes.length > 0) return { kind: "hole", index: s.holes.length - 1 };
+  return s.kind === "polygon" ? { kind: "outer", index: 0 } : null;
+}
+
 // ----- shared helpers -----
 
 const noopOf = (s: AuthoringShape): Built => ({ shape: s, preselect: null, warning: null });
@@ -58,8 +169,6 @@ function rectFromCorners(p1: Vec2, p2: Vec2): Outline | null {
   return [{ x: x0, y: y0 }, { x: x1, y: y0 }, { x: x1, y: y1 }, { x: x0, y: y1 }];
 }
 
-// Decompose a polygon-clipping MultiPolygon into AuthoringShape pieces:
-// each piece's outer ring becomes an outer; inner rings become polygon holes.
 function decompose(mp: MultiPolygon): { outers: Outline[]; holes: Hole[] } {
   const outers: Outline[] = [];
   const holes: Hole[] = [];
@@ -69,7 +178,7 @@ function decompose(mp: MultiPolygon): { outers: Outline[]; holes: Hole[] } {
       holes.push({ kind: "polygon", outline: ringToOutline(piece[i]!) });
     }
   }
-  return outers.length > 0 ? { outers, holes } : { outers: [], holes };
+  return { outers, holes };
 }
 
 // ----- ops -----
@@ -91,19 +200,13 @@ function eraseRect(base: AuthoringShape, p1: Vec2, p2: Vec2): BuildResult {
   if (!rect) return noopOf(base);
   const rectMP: MultiPolygon = [[outlineToRing(rect)]];
   const filled = polygonClipping.difference(outerMultiPolygonOf(base), holesMultiPolygon(base.holes));
-  // Off-shape erase is a true noop — keeps disk identity intact.
   if (polygonClipping.intersection(filled, rectMP).length === 0) return noopOf(base);
 
   const consumesCircle = base.kind === "disk" || base.holes.some((h) =>
-    h.kind === "circle" &&
-    polygonClipping.intersection(rectMP, [[ringFromCircle(h.cx, h.cy, h.r)]]).length > 0,
+    h.kind === "circle" && polygonClipping.intersection(rectMP, holeMP(h)).length > 0,
   );
-
-  // Surviving circle holes (rect didn't touch). Polygon holes get re-derived
-  // from the new filled region.
   const survivors = base.holes.filter((h) =>
-    h.kind === "circle" &&
-    polygonClipping.intersection(rectMP, [[ringFromCircle(h.cx, h.cy, h.r)]]).length === 0,
+    h.kind === "circle" && polygonClipping.intersection(rectMP, holeMP(h)).length === 0,
   );
   const newFilled = polygonClipping.difference(filled, rectMP);
   const { outers, holes: emergent } = decompose(newFilled);
@@ -118,58 +221,20 @@ function eraseRect(base: AuthoringShape, p1: Vec2, p2: Vec2): BuildResult {
   };
 }
 
+// Trivial: insert as a circle. normalize handles cross/overlap/outside.
 function addHole(base: AuthoringShape, center: Vec2, edge: Vec2): BuildResult {
-  const r = Math.hypot(edge.x - center.x, edge.y - center.y);
+  const r = quantize(Math.hypot(edge.x - center.x, edge.y - center.y));
   if (r === 0) return noopOf(base);
   if (!(r > 0)) return { reason: `add-hole: invalid radius ${r}` };
   return addCircleHole(base, center.x, center.y, r);
 }
 
-// Auto-merges when the new circle crosses the outer or overlaps existing
-// holes — the collision is subtracted from the filled region and the result
-// re-decomposed. Clean placement keeps the new hole as a circle prim.
 function addCircleHole(base: AuthoringShape, cx: number, cy: number, r: number): BuildResult {
-  const outerMP = outerMultiPolygonOf(base);
-  const holeMP: MultiPolygon = [[ringFromCircle(cx, cy, r)]];
-
-  const inside = polygonClipping.intersection(holeMP, outerMP);
-  if (inside.length === 0) {
-    return { shape: base, preselect: null, warning: { tag: "hole-outside-shape" } };
-  }
-  const crossesOuter = polygonClipping.difference(holeMP, outerMP).length > 0;
-  const overlappedIdxs: number[] = [];
-  for (let i = 0; i < base.holes.length; i++) {
-    const h = base.holes[i]!;
-    const ring = h.kind === "circle" ? ringFromCircle(h.cx, h.cy, h.r) : outlineToRing(h.outline);
-    if (polygonClipping.intersection(holeMP, [[ring]]).length > 0) overlappedIdxs.push(i);
-  }
-
-  // Clean: keep as a circle, kind preserved.
-  if (!crossesOuter && overlappedIdxs.length === 0) {
-    const newHole: Hole = { kind: "circle", cx, cy, r };
-    const shape: AuthoringShape = base.kind === "disk"
-      ? { ...base, holes: [...base.holes, newHole] }
-      : { kind: "polygon", outers: base.outers.map(cloneOutline), holes: [...base.holes, newHole] };
-    return { shape, preselect: { kind: "hole", index: shape.holes.length - 1 }, warning: null };
-  }
-
-  // Merge: subtract (hole ∩ outer) ∪ overlappedHoles from the filled region.
-  const survivors = base.holes.filter((_, i) => !overlappedIdxs.includes(i));
-  const survivorsMP = holesMultiPolygon(survivors);
-  const overlappedMP = holesMultiPolygon(overlappedIdxs.map((i) => base.holes[i]!));
-  const filled = survivorsMP.length > 0 ? polygonClipping.difference(outerMP, survivorsMP) : outerMP;
-  const bite = overlappedMP.length > 0 ? polygonClipping.union(inside, overlappedMP) : inside;
-  const newFilled = polygonClipping.difference(filled, bite);
-  const { outers, holes: emergent } = decompose(newFilled);
-  const holes = [...survivors, ...emergent];
-  const preselect: Selection = emergent.length > 0
-    ? { kind: "hole", index: holes.length - 1 }
-    : { kind: "outer", index: 0 };
-  return {
-    shape: { kind: "polygon", outers, holes },
-    preselect,
-    warning: { tag: "circle-lost" },
-  };
+  const newHole: Hole = { kind: "circle", cx, cy, r };
+  const shape: AuthoringShape = base.kind === "disk"
+    ? { ...base, holes: [...base.holes, newHole] }
+    : { kind: "polygon", outers: base.outers.map(cloneOutline), holes: [...base.holes, newHole] };
+  return { shape, preselect: { kind: "hole", index: shape.holes.length - 1 }, warning: null };
 }
 
 function moveVert(base: AuthoringShape, sel: Selection, index: number, target: Vec2): BuildResult {
@@ -210,7 +275,6 @@ function moveDisk(base: AuthoringShape, patch: { cx?: number; cy?: number; r?: n
   return { shape, preselect: { kind: "disk" }, warning: null };
 }
 
-// Drop the target hole, re-add at the new geometry — reuses addCircleHole.
 function moveCircleHole(
   base: AuthoringShape,
   index: number,
@@ -239,7 +303,6 @@ function outlineForSel(s: AuthoringShape, sel: Selection): Outline | null {
   return null;
 }
 
-// Caller has already verified the outline exists at `sel` via outlineForSel.
 function replaceOutline(base: AuthoringShape, sel: Selection, newOl: Outline): BuildResult {
   if (sel.kind === "outer" && base.kind === "polygon") {
     const outers = base.outers.map((o, i) => (i === sel.index ? newOl : cloneOutline(o)));
