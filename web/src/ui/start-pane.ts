@@ -24,12 +24,12 @@ const PRESET_FIELDS: Record<Preset, FieldDef[]> = {
   rod:       [{ name: "D", label: "D", min: MIN_INITIAL_DIM, step: 0.5 }],
   rect:      [{ name: "W", label: "W", min: MIN_INITIAL_DIM, step: 0.5 },
               { name: "H", label: "H", min: MIN_INITIAL_DIM, step: 0.5 }],
-  extrusion: [{ name: "S", label: "S", min: 1010, step: 1 }],
+  extrusion: [],
 };
 const PRESET_DEFAULTS: Record<Preset, Record<string, number>> = {
   rod:       { D: 5 },
   rect:      { W: 20, H: 5 },
-  extrusion: { S: 2020 },
+  extrusion: {},
 };
 
 const SIZE_INPUT_REFIT_DEBOUNCE_MS = 350;
@@ -84,7 +84,7 @@ export class StartPane {
 
   private applyPreset(preset: Preset, vals: Record<string, number>): void {
     this.setShapeFromPreset(preset, vals);
-    this.showSizeInput(preset, vals);
+    if (PRESET_FIELDS[preset].length > 0) this.showSizeInput(preset, vals);
   }
 
   private setShapeFromPreset(
@@ -95,7 +95,7 @@ export class StartPane {
     switch (preset) {
       case "rod":       this.editor.setShape(rodOf(vals.D!), opts); break;
       case "rect":      this.editor.setShape(rectShapeOf(vals.W!, vals.H!), opts); break;
-      case "extrusion": this.editor.setShape(extrusionOf(vals.S!), opts); break;
+      case "extrusion": this.editor.setShape(extrusionOf(), opts); break;
     }
     // Preset-driven shape changes don't count as user modification.
     this.userModified = false;

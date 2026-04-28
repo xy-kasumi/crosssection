@@ -103,6 +103,18 @@ export class Editor {
 
   getShape(): AuthoringShape { return this.shape; }
 
+  // Hidden dev hook for capturing GUI-authored shapes into source.
+  // Run __editor.dumpShape() in devtools — paste the result inline into
+  // zero-state.ts buildDemoEntries() or as a factory body in geom/presets.ts.
+  // Clipboard write is best-effort: it fails when devtools has focus, in
+  // which case copy from the console log instead.
+  dumpShape(): string {
+    const literal = JSON.stringify(this.shape, null, 2);
+    console.log(literal);
+    navigator.clipboard?.writeText(literal).catch(() => {});
+    return literal;
+  }
+
   // refit:false skips the viewport refit — used while debouncing rapid
   // size-input typing, so the grid doesn't chase every keystroke. The shape
   // itself still updates immediately so the user can see what they typed.

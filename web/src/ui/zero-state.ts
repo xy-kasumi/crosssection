@@ -8,7 +8,7 @@
 // from). Exit happens on the first preset click and is one-way.
 
 import {
-  compose, extrusionOf, rectShapeOf, rodOf,
+  compose, extrusionOf, rodOf,
   type AuthoringShape,
 } from "@geom/index.ts";
 import type { SolverShape } from "@solver/shape.ts";
@@ -73,23 +73,22 @@ function buildDemoEntries(): DemoEntry[] {
       I, I, 2 * I,
     );
   }
-  // 3. Solid square, a = 14 mm. Ix = Iy = a⁴/12; J = β₁ a⁴, β₁ ≈ 0.140577 (Roark).
-  {
-    const a = 14;
-    const I = a ** 4 / 12;
-    const J = 0.140577 * a ** 4;
-    push(rectShapeOf(a, a), I, I, J);
-  }
-  // 4. 30×30 hollow square (extrusion 3030 placeholder, t = 2 mm wall).
-  //    Ix = Iy by subtraction (exact). J via Bredt thin-wall, which for a
-  //    square tube simplifies: J = 4·Aₘ²·t / peri = Wₘ³·t  with Wₘ = W−t.
-  {
-    const Wo = 30, Wi = 26;
-    const I = (Wo ** 4 - Wi ** 4) / 12;
-    const Wm = (Wo + Wi) / 2;
-    const t = (Wo - Wi) / 2;
-    const J = Wm ** 3 * t;
-    push(extrusionOf(3030), I, I, J);
-  }
+  // 3. 5-point star, hand-authored (single tip up → Ix ≠ Iy). No closed
+  //    form; values precomputed.
+  push(
+    {
+      kind: "polygon",
+      outers: [[
+        { x: -11, y:  3 }, { x:  -5, y: -2 }, { x:  -7, y: -9 }, { x:   0, y: -5 },
+        { x:   7, y: -9 }, { x:   5, y: -2 }, { x:  11, y:  3 }, { x:   3, y:  5 },
+        { x:   0, y: 11 }, { x:  -3, y:  5 },
+      ]],
+      holes: [],
+    },
+    2900, 3400, 3100,
+  );
+  // 4. 20×20 T-slot extrusion (hand-authored profile, see extrusionOf).
+  //    Ix, Iy, J are precomputed numeric constants for this fixed shape.
+  push(extrusionOf(), 7500, 7500, 810);
   return out;
 }

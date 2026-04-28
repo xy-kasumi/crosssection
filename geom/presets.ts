@@ -15,16 +15,24 @@ export function rectShapeOf(W: number, H: number): PolygonShape {
   return { kind: "polygon", outers: [rectOutline(0, 0, W, H)], holes: [] };
 }
 
-// T-slot extrusion. S is the model number (e.g. 2020 → 20×20 mm). Geometry is
-// a placeholder (hollow square with 2 mm wall) — recognizable in silhouette
-// but not the actual T-slot profile. Refine when the broader UX lands.
-export function extrusionOf(S: number): PolygonShape {
-  const W = Math.max(5, Math.floor(S / 100));
-  const H = Math.max(5, S % 100);
-  const t = 2;
+// 20×20 T-slot extrusion profile, centered. Hand-authored snapshot — no
+// parameters; replace the literal to retune the geometry.
+export function extrusionOf(): PolygonShape {
   return {
     kind: "polygon",
-    outers: [rectOutline(0, 0, W, H)],
-    holes: [{ kind: "polygon", outline: rectOutline(0, 0, W - 2 * t, H - 2 * t) }],
+    outers: [[
+      { x: -10, y: -10 }, { x:  -3, y: -10 }, { x:  -3, y:  -8 }, { x:  -6, y:  -8 },
+      { x:  -6, y:  -7 }, { x:  -3, y:  -4 }, { x:   3, y:  -4 }, { x:   6, y:  -7 },
+      { x:   6, y:  -8 }, { x:   3, y:  -8 }, { x:   3, y: -10 }, { x:  10, y: -10 },
+      { x:  10, y:  -3 }, { x:   8, y:  -3 }, { x:   8, y:  -6 }, { x:   7, y:  -6 },
+      { x:   4, y:  -3 }, { x:   4, y:   3 }, { x:   7, y:   6 }, { x:   8, y:   6 },
+      { x:   8, y:   3 }, { x:  10, y:   3 }, { x:  10, y:  10 }, { x:   3, y:  10 },
+      { x:   3, y:   8 }, { x:   6, y:   8 }, { x:   6, y:   7 }, { x:   3, y:   4 },
+      { x:  -3, y:   4 }, { x:  -6, y:   7 }, { x:  -6, y:   8 }, { x:  -3, y:   8 },
+      { x:  -3, y:  10 }, { x: -10, y:  10 }, { x: -10, y:   3 }, { x:  -8, y:   3 },
+      { x:  -8, y:   6 }, { x:  -7, y:   6 }, { x:  -4, y:   3 }, { x:  -4, y:  -3 },
+      { x:  -7, y:  -6 }, { x:  -8, y:  -6 }, { x:  -8, y:  -3 }, { x: -10, y:  -3 },
+    ]],
+    holes: [{ kind: "circle", cx: 0, cy: 0, r: 2.195 }],
   };
 }
