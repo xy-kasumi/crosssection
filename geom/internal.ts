@@ -71,7 +71,8 @@ export function rectOutline(cx: number, cy: number, w: number, h: number): Outli
 export function outerMultiPolygonOf(s: AuthoringShape): MultiPolygon {
   if (s.kind === "disk") return [[ringFromCircle(s.cx, s.cy, s.r)]];
   if (s.outers.length === 1) return [[outlineToRing(s.outers[0]!)]];
-  return polygonClipping.union(...s.outers.map((o): MultiPolygon => [[outlineToRing(o)]]));
+  const parts = s.outers.map((o): MultiPolygon => [[outlineToRing(o)]]);
+  return polygonClipping.union(parts[0]!, ...parts.slice(1));
 }
 
 export function holesMultiPolygon(holes: readonly Hole[]): MultiPolygon {
@@ -81,7 +82,7 @@ export function holesMultiPolygon(holes: readonly Hole[]): MultiPolygon {
       ? [[ringFromCircle(h.cx, h.cy, h.r)]]
       : [[outlineToRing(h.outline)]],
   );
-  return polygonClipping.union(...parts);
+  return polygonClipping.union(parts[0]!, ...parts.slice(1));
 }
 
 // Single ring as a MultiPolygon — convenient for hole-by-hole boolean tests.
