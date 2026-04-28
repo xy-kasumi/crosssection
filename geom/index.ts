@@ -30,7 +30,9 @@ export { apply } from "./apply.ts";
 export {
   defaultDisk,
   rodOf,
+  pipeOf,
   rectShapeOf,
+  boxOf,
   extrusionOf,
 } from "./presets.ts";
 

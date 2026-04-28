@@ -11,8 +11,25 @@ export function rodOf(D: number): DiskShape {
   return { kind: "disk", cx: 0, cy: 0, r: D / 2, holes: [] };
 }
 
+// Hollow round. T is wall thickness; inner radius = D/2 − T.
+export function pipeOf(D: number, T: number): DiskShape {
+  return {
+    kind: "disk", cx: 0, cy: 0, r: D / 2,
+    holes: [{ kind: "circle", cx: 0, cy: 0, r: D / 2 - T }],
+  };
+}
+
 export function rectShapeOf(W: number, H: number): PolygonShape {
   return { kind: "polygon", outers: [rectOutline(0, 0, W, H)], holes: [] };
+}
+
+// Hollow rect. T is wall thickness; inner cavity is (W − 2T) × (H − 2T).
+export function boxOf(W: number, H: number, T: number): PolygonShape {
+  return {
+    kind: "polygon",
+    outers: [rectOutline(0, 0, W, H)],
+    holes: [{ kind: "polygon", outline: rectOutline(0, 0, W - 2 * T, H - 2 * T) }],
+  };
 }
 
 // 20×20 T-slot extrusion profile, centered. Hand-authored snapshot — no

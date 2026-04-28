@@ -174,25 +174,43 @@ main {
 }
 
 .start-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
   display: flex;
   flex-direction: column;
   gap: var(--gap-snug);
 }
+.start-row {
+  display: flex;
+  align-items: stretch;
+  gap: var(--gap-snug);
+}
+.start-row-label {
+  flex-shrink: 0;
+  width: 48px;
+  font-size: var(--fs-ui);
+  opacity: 0.75;
+  display: flex;
+  align-items: center;
+}
 .start-btn {
-  width: 100%;
-  text-align: left;
-  padding: var(--gap-snug) var(--gap-cozy);
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 5px var(--gap-snug);
   border: 1px solid var(--border-strong);
   background: transparent;
-  border-radius: var(--radius-card);
+  border-radius: var(--radius-control);
   cursor: pointer;
   font: inherit;
-  font-size: var(--fs-body);
+  font-size: var(--fs-ui);
 }
 .start-btn:hover { background: var(--hover-tint); }
+.start-glyph {
+  font-size: 16px;
+  line-height: 1;
+}
+.start-tag { opacity: 0.75; }
 
 .results-section {
   margin-top: auto;        /* push readouts to the bottom of the left column */

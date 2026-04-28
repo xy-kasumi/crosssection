@@ -8,10 +8,10 @@
 // Typing in the overlay updates the shape immediately; the grid refit is
 // debounced so it doesn't chase rapid keystrokes ("32" → "3" → "33").
 
-import { extrusionOf, rectShapeOf, rodOf } from "@geom/index.ts";
+import { boxOf, extrusionOf, pipeOf, rectShapeOf, rodOf } from "@geom/index.ts";
 import type { Editor } from "../editor.ts";
 
-type Preset = "rod" | "rect" | "extrusion";
+type Preset = "rod" | "pipe" | "rect" | "box" | "extrusion";
 type FieldDef = { name: string; label: string; min: number; step: number };
 
 // Floor for initial-size dimensions. 0.02 mm is the smallest the editor
@@ -22,13 +22,20 @@ const MIN_INITIAL_DIM = 0.02;
 
 const PRESET_FIELDS: Record<Preset, FieldDef[]> = {
   rod:       [{ name: "D", label: "D", min: MIN_INITIAL_DIM, step: 0.5 }],
+  pipe:      [{ name: "D", label: "D", min: MIN_INITIAL_DIM, step: 0.5 },
+              { name: "T", label: "T", min: MIN_INITIAL_DIM, step: 0.2 }],
   rect:      [{ name: "W", label: "W", min: MIN_INITIAL_DIM, step: 0.5 },
               { name: "H", label: "H", min: MIN_INITIAL_DIM, step: 0.5 }],
+  box:       [{ name: "W", label: "W", min: MIN_INITIAL_DIM, step: 0.5 },
+              { name: "H", label: "H", min: MIN_INITIAL_DIM, step: 0.5 },
+              { name: "T", label: "T", min: MIN_INITIAL_DIM, step: 0.2 }],
   extrusion: [],
 };
 const PRESET_DEFAULTS: Record<Preset, Record<string, number>> = {
   rod:       { D: 5 },
+  pipe:      { D: 12, T: 2 },
   rect:      { W: 20, H: 5 },
+  box:       { W: 20, H: 20, T: 2 },
   extrusion: {},
 };
 
@@ -94,7 +101,9 @@ export class StartPane {
   ): void {
     switch (preset) {
       case "rod":       this.editor.setShape(rodOf(vals.D!), opts); break;
+      case "pipe":      this.editor.setShape(pipeOf(vals.D!, vals.T!), opts); break;
       case "rect":      this.editor.setShape(rectShapeOf(vals.W!, vals.H!), opts); break;
+      case "box":       this.editor.setShape(boxOf(vals.W!, vals.H!, vals.T!), opts); break;
       case "extrusion": this.editor.setShape(extrusionOf(), opts); break;
     }
     // Preset-driven shape changes don't count as user modification.

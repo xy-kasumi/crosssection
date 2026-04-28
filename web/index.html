@@ -21,16 +21,27 @@
     <main>
       <aside class="left-col" id="start-pane">
         <section class="left-section" id="start-section">
-          <button class="section-toggle" id="start-pane-toggle" type="button" aria-label="toggle start from">
-            <span class="section-title">Start from</span>
+          <button class="section-toggle" id="start-pane-toggle" type="button" aria-label="toggle presets">
+            <span class="section-title">Presets</span>
             <span class="chevron" aria-hidden="true">▾</span>
           </button>
           <div class="section-body">
-            <ul class="start-list">
-              <li><button class="start-btn" data-preset="rod"       type="button">Rod</button></li>
-              <li><button class="start-btn" data-preset="rect"      type="button">Rectangle</button></li>
-              <li><button class="start-btn" data-preset="extrusion" type="button">Extrusion</button></li>
-            </ul>
+            <div class="start-list">
+              <div class="start-row">
+                <span class="start-row-label">Round</span>
+                <button class="start-btn" data-preset="rod"  type="button" title="Solid"><span class="start-glyph">●</span><span class="start-tag">solid</span></button>
+                <button class="start-btn" data-preset="pipe" type="button" title="Hollow"><span class="start-glyph">◎</span><span class="start-tag">hollow</span></button>
+              </div>
+              <div class="start-row">
+                <span class="start-row-label">Rect</span>
+                <button class="start-btn" data-preset="rect" type="button" title="Solid"><span class="start-glyph">■</span><span class="start-tag">solid</span></button>
+                <button class="start-btn" data-preset="box"  type="button" title="Hollow"><span class="start-glyph">▢</span><span class="start-tag">hollow</span></button>
+              </div>
+              <div class="start-row">
+                <span class="start-row-label">Frame</span>
+                <button class="start-btn" data-preset="extrusion" type="button">2020</button>
+              </div>
+            </div>
           </div>
         </section>
 
