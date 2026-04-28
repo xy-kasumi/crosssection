@@ -5,7 +5,7 @@ import polygonClipping, { type MultiPolygon } from "polygon-clipping";
 import type { AuthoringShape, Hole, Outline, Vec2 } from "./shape.ts";
 
 const CIRCLE_N = 64; // polygonization for circles & disk outers (kept consistent with solver/presets.ts)
-const Q = 1000;      // 1µm precision: stored coords are integer multiples of 1/Q mm.
+const Q = 10000;     // 0.1µm precision: stored coords are integer multiples of 1/Q mm.
 
 export type PCRing = readonly (readonly [number, number])[];
 

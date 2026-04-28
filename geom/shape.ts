@@ -12,7 +12,7 @@
 //
 // `compose(s)` is a pure translation to SolverShape — never errors.
 //
-// All coords inside geom/ are exact multiples of 1µm (1/1000 mm); see
+// All coords inside geom/ are exact multiples of 0.1µm (1/10000 mm); see
 // internal.ts for the quantization rules.
 
 import polygonClipping from "polygon-clipping";

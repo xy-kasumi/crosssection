@@ -180,15 +180,15 @@ test("move-vert polygon-hole vertex into another polygon hole → ok, holes merg
   assert.ok(r.shape.holes.length <= 1);
 });
 
-test("apply produces only 1µm-grid coordinates", () => {
+test("apply produces only 0.1µm-grid coordinates", () => {
   // Even after irrational ops (move-disk-radius via hypot of arbitrary
-  // floats), every coord in the result must be an integer multiple of 0.001.
+  // floats), every coord in the result must be an integer multiple of 0.0001.
   const rod = rodOf(7);
   const r1 = apply(rod, { kind: "move-disk-radius", r: Math.PI });
   if (r1.kind !== "ok" && r1.kind !== "warning") throw new Error("setup");
   const r2 = apply(r1.shape, { kind: "move-disk-center", target: { x: 1 / 3, y: Math.E } });
   if (r2.kind !== "ok" && r2.kind !== "warning") throw new Error("setup");
-  const isGrid = (v: number) => Math.abs(Math.round(v * 1000) - v * 1000) < 1e-9;
+  const isGrid = (v: number) => Math.abs(Math.round(v * 10000) - v * 10000) < 1e-7;
   const s = r2.shape;
   if (s.kind === "disk") {
     assert.ok(isGrid(s.cx) && isGrid(s.cy) && isGrid(s.r), `disk coord off-grid: ${s.cx},${s.cy},${s.r}`);
