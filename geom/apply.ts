@@ -11,9 +11,8 @@
 import polygonClipping, { type MultiPolygon } from "polygon-clipping";
 
 import {
-  holeMP, holesMultiPolygon, outerMultiPolygonOf,
+  decompose, holeMP, holesMultiPolygon, outerMultiPolygonOf,
   outlineToRing, quantize, quantizeVec,
-  ringToOutline,
 } from "./internal.ts";
 import { check } from "./shape.ts";
 import type {
@@ -167,18 +166,6 @@ function rectFromCorners(p1: Vec2, p2: Vec2): Outline | null {
   const y0 = Math.min(p1.y, p2.y), y1 = Math.max(p1.y, p2.y);
   if (x0 === x1 || y0 === y1) return null;
   return [{ x: x0, y: y0 }, { x: x1, y: y0 }, { x: x1, y: y1 }, { x: x0, y: y1 }];
-}
-
-function decompose(mp: MultiPolygon): { outers: Outline[]; holes: Hole[] } {
-  const outers: Outline[] = [];
-  const holes: Hole[] = [];
-  for (const piece of mp) {
-    outers.push(ringToOutline(piece[0]!));
-    for (let i = 1; i < piece.length; i++) {
-      holes.push({ kind: "polygon", outline: ringToOutline(piece[i]!) });
-    }
-  }
-  return { outers, holes };
 }
 
 // ----- ops -----

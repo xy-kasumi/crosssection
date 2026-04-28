@@ -4,6 +4,21 @@ import polygonClipping, { type MultiPolygon } from "polygon-clipping";
 
 import type { AuthoringShape, Hole, Outline, Vec2 } from "./shape.ts";
 
+// MultiPolygon → AuthoringShape pieces. Each piece's first ring is the
+// outer; subsequent rings are emergent polygon holes. Coords are quantized
+// via ringToOutline.
+export function decompose(mp: MultiPolygon): { outers: Outline[]; holes: Hole[] } {
+  const outers: Outline[] = [];
+  const holes: Hole[] = [];
+  for (const piece of mp) {
+    outers.push(ringToOutline(piece[0]!));
+    for (let i = 1; i < piece.length; i++) {
+      holes.push({ kind: "polygon", outline: ringToOutline(piece[i]!) });
+    }
+  }
+  return { outers, holes };
+}
+
 const CIRCLE_N = 64; // polygonization for circles & disk outers (kept consistent with solver/presets.ts)
 const Q = 10000;     // 0.1µm precision: stored coords are integer multiples of 1/Q mm.
 

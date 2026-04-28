@@ -35,3 +35,6 @@ export {
 } from "./presets.ts";
 
 export { rectOutline } from "./internal.ts";
+
+export { symCompose, IDENTITY } from "./symmetry.ts";
+export type { AffineMat } from "./symmetry.ts";
