@@ -38,9 +38,13 @@ const ENTRIES: Entry[] = [
   // text span is the one without a child <input> — index second).
   { sel: ".snap-toggle span:not(.kbd-hint)",                     en: "Snap to grid", ja: "グリッド吸着" },
 
-  // Right-strip wordmark — per-locale. Credit (夕月霞) and source link stay
-  // language-neutral; they are not in this map.
-  { sel: "#wordmark",                                            en: "crosssection", ja: "断面形状" },
+  // Right-strip wordmark — per-locale. Credit text (夕月霞) stays in CJK
+  // regardless of locale, but its link target switches: EN points to the
+  // EN-primary personal site; JA points to the JA-rich Scrapbox wiki.
+  { sel: "#wordmark",   en: "crosssection",            ja: "断面形状" },
+  { sel: ".credit-link", attr: "href",
+    en: "https://www.xy-kasumi.net/",
+    ja: "https://scrapbox.io/xyx/" },
 
   // Readout tooltips. Native title=; the JP phrasing uses 「まわり」(about)
   // because Iₓ governs bending **about** the X axis, not "in the X
