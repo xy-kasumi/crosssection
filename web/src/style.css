@@ -240,7 +240,7 @@ main {
   text-align: right;
   transition: opacity 0.2s;
 }
-.readout-val.computing { opacity: 0.4; }
+.readout-val.computing { opacity: 0.18; }
 .readout-val.invalid   { color: var(--danger); opacity: 0.85; }
 .readout-unit { font-size: var(--fs-caption); opacity: 0.6; }
 

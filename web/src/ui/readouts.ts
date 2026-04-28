@@ -11,6 +11,12 @@ export class Readouts {
   private readonly iy: HTMLElement;
   private readonly j: HTMLElement;
   private readonly status: HTMLElement;
+  // Stays false until the first real (FEM or demo-supplied) value lands.
+  // While false, entering computing mode blanks the readouts to "—" — we
+  // don't have a previous value worth fading. Once true, recompute keeps
+  // the previous value visible (and faded) so the user sees what's being
+  // refined instead of a blank flash.
+  private hasComputed = false;
 
   constructor() {
     this.area = document.getElementById("area")!;
@@ -27,9 +33,13 @@ export class Readouts {
     this.j.textContent  = twoSigFigs(j);
     this.setMode("computed");
     this.status.textContent = statusText;
+    this.hasComputed = true;
   }
 
   setComputing(on: boolean): void {
+    if (on && !this.hasComputed) {
+      for (const el of this.allValues()) el.textContent = "—";
+    }
     for (const el of this.allValues()) {
       el.classList.toggle("computing", on);
       el.classList.remove("invalid");
@@ -54,6 +64,9 @@ export class Readouts {
     this.j.textContent  = twoSigFigs(j);
     this.setMode("computed");
     this.status.textContent = "";
+    // Zero-state demo numbers are not the user's own first compute — leave
+    // hasComputed false so the readouts blank to "—" the moment the user
+    // exits zero-state and a real recompute starts.
   }
 
   private *allValues(): Generator<HTMLElement> {
