@@ -36,5 +36,5 @@ export {
 
 export { rectOutline } from "./internal.ts";
 
-export { symCompose, IDENTITY } from "./symmetry.ts";
-export type { AffineMat } from "./symmetry.ts";
+export { symCompose, dimRegionsOf } from "./symmetry.ts";
+export type { SymGroup, SymComposeResult } from "./symmetry.ts";

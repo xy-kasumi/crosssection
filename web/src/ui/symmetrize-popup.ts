@@ -8,10 +8,10 @@
 // because Symmetrize is a wholesale shape replacement, not an Op. apply()'s
 // per-op pipeline isn't involved.
 
-import { check, symCompose, type AuthoringShape, type ErrorTag } from "@geom/index.ts";
+import { dimRegionsOf, symCompose, type SymComposeResult } from "@geom/index.ts";
 import type { Editor, ToolStatus } from "../editor.ts";
-import { errorText } from "../error-text.ts";
-import { SYM_SPECS, type SymKind, type SymSpec } from "./symmetrize.ts";
+import { errorText, warnText } from "../error-text.ts";
+import { SYM_SPECS, type SymSpec } from "./symmetrize.ts";
 
 export interface SymmetrizePopupOpts {
   editor: Editor;
@@ -20,9 +20,7 @@ export interface SymmetrizePopupOpts {
 
 interface Preview {
   spec: SymSpec;
-  result: AuthoringShape | null;  // null when symCompose returned empty
-  errorTag: ErrorTag | null;       // non-null when result violates check()
-  valid: boolean;                  // can we commit?
+  result: SymComposeResult;
 }
 
 export class SymmetrizePopup {
@@ -49,7 +47,7 @@ export class SymmetrizePopup {
     });
 
     for (const btn of this.optionBtns) {
-      const kind = btn.dataset.sym as SymKind;
+      const kind = btn.dataset.sym;
       const spec = SYM_SPECS.find(s => s.kind === kind);
       if (!spec) continue;
       btn.addEventListener("mouseenter", () => this.preview(spec));
@@ -60,7 +58,6 @@ export class SymmetrizePopup {
       });
     }
 
-    // Outside-click and Esc to dismiss.
     document.addEventListener("click", () => {
       if (this.isOpen) this.close();
     });
@@ -88,38 +85,31 @@ export class SymmetrizePopup {
 
   private preview(spec: SymSpec): void {
     const E = this.editor.getShape();
-    const result = symCompose(E, spec.region, spec.transforms);
-    let errorTag: ErrorTag | null = null;
-    let valid = false;
+    const result = symCompose(E, spec.kind);
+    const dim = dimRegionsOf(spec.kind);
 
-    if (result === null) {
+    if (result.kind === "error") {
       this.onStatus({
         level: "error",
-        message: `${spec.label}: nothing inside the canonical region`,
+        message: `${spec.label}: ${errorText(result)}`,
       });
-      this.editor.setPreviewShape(null, { dim: spec.dimRegions });
+      // Keep the original shape visible; only show dim so user can see *why*.
+      this.editor.setPreviewShape(null, { dim });
+    } else if (result.kind === "warning") {
+      this.onStatus({
+        level: "warning",
+        message: `${spec.label}: ${warnText(result)}`,
+      });
+      this.editor.setPreviewShape(result.shape, { dim });
     } else {
-      errorTag = check(result);
-      if (errorTag) {
-        this.onStatus({
-          level: "error",
-          message: `${spec.label}: ${errorText(errorTag)}`,
-        });
-        // Show dim only — leave the original composed shape visible so the
-        // user can see *why* the symmetric union didn't work.
-        this.editor.setPreviewShape(null, { dim: spec.dimRegions });
-      } else {
-        this.onStatus({ level: "valid", message: null });
-        this.editor.setPreviewShape(result, { dim: spec.dimRegions });
-        valid = true;
-      }
+      this.onStatus({ level: "valid", message: null });
+      this.editor.setPreviewShape(result.shape, { dim });
     }
-    this.current = { spec, result, errorTag, valid };
+    this.current = { spec, result };
   }
 
   // Debounced clear: wait a tick so moving between option buttons doesn't
-  // briefly drop the preview. If the cursor is still inside the popup or
-  // parent button after the tick, leave the preview alone.
+  // briefly drop the preview.
   private maybeClearPreview(): void {
     setTimeout(() => {
       if (!this.isOpen) return;
@@ -139,12 +129,10 @@ export class SymmetrizePopup {
     if (!this.current || this.current.spec.kind !== spec.kind) {
       this.preview(spec);
     }
-    if (!this.current?.valid || !this.current.result) {
-      // Invalid — keep popup open so the user can hover the other option.
-      return;
-    }
-    const result = this.current.result;
+    const r = this.current?.result;
+    if (!r || r.kind === "error") return;
+    const shape = r.shape;
     this.close();
-    this.editor.setShape(result);
+    this.editor.setShape(shape);
   }
 }

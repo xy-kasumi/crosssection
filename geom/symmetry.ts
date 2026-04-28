@@ -1,68 +1,223 @@
-// symCompose: clip-and-symmetrize a shape with no awareness of edit modes.
-// The UI supplies the region polygon and the affine-transform list; this
-// module just runs the union-of-clipped-and-transformed-copies pipeline.
+// Symmetrize: per-primitive orbit emission with canonical-region clamping.
+// User-centred heuristic — see issue #1.
+//
+// Per-primitive rules:
+//   DiskShape outer: center==origin → returned as-is. Otherwise polygonize
+//     the disk, clamp to the canonical region, take the orbit, union → polygon.
+//   PolygonShape outer: clamp each outer ring, take orbit, union → polygon.
+//   CircleHole: filter by center membership in the canonical region (binary,
+//     preserves circle identity); apply group transforms to the center;
+//     dedupe by quantized (cx, cy); emit one circle hole per center.
+//   PolygonHole: clamp + orbit-union, like the polygon outer.
+//
+// The raw candidate is then handed to `normalize` (handles every overlap
+// case — overlapping circle holes get polygonized with circle-lost warning,
+// holes outside the outer get dropped, etc.) and `check` (final contract).
+// The trichotomy (ok / warning / error) mirrors `apply`'s ApplyResult so
+// the UI can reuse status reporting.
 
 import polygonClipping, { type MultiPolygon } from "polygon-clipping";
 
 import {
-  decompose, holesMultiPolygon, outerMultiPolygonOf, outlineToRing, quantize,
+  decompose, outerMultiPolygonOf, outlineToRing, quantize, ringFromCircle,
 } from "./internal.ts";
-import type { AuthoringShape, Outline } from "./shape.ts";
+import { normalize } from "./apply.ts";
+import { check } from "./shape.ts";
+import type {
+  AuthoringShape, ErrorTag, Hole, Outline, WarnTag,
+} from "./shape.ts";
 
-// Affine: (x',y') = (a*x + b*y + e, c*x + d*y + f). Pure-rotation + reflection
-// matrices have e=f=0, but translations are allowed in case future modes need
-// them.
-export type AffineMat = readonly [a: number, b: number, c: number, d: number, e: number, f: number];
+export type SymGroup = "D1" | "D4";
 
-export const IDENTITY: AffineMat = [1, 0, 0, 1, 0, 0];
+export type SymComposeResult =
+  | { kind: "ok"; shape: AuthoringShape }
+  | ({ kind: "warning"; shape: AuthoringShape } & WarnTag)
+  | ({ kind: "error" } & ErrorTag);
 
-function isIdentity(m: AffineMat): boolean {
-  return m[0] === 1 && m[1] === 0 && m[2] === 0 && m[3] === 1 && m[4] === 0 && m[5] === 0;
+// Affine [a, b, c, d, e, f]: (x', y') = (a*x + b*y + e, c*x + d*y + f).
+// Internal — not exposed; the public surface accepts only SymGroup keys.
+type AffineMat = readonly [number, number, number, number, number, number];
+
+const I_MAT:    AffineMat = [1, 0, 0, 1, 0, 0];
+const REF_Y:    AffineMat = [-1, 0, 0, 1, 0, 0];   // (x,y) → (-x, y)
+const R90:      AffineMat = [0, -1, 1, 0, 0, 0];
+const R180:     AffineMat = [-1, 0, 0, -1, 0, 0];
+const R270:     AffineMat = [0, 1, -1, 0, 0, 0];
+const REF_X:    AffineMat = [1, 0, 0, -1, 0, 0];
+const REF_YEQX: AffineMat = [0, 1, 1, 0, 0, 0];
+const REF_YEQNX:AffineMat = [0, -1, -1, 0, 0, 0];
+
+const TRANSFORMS: Record<SymGroup, readonly AffineMat[]> = {
+  D1: [I_MAT, REF_Y],
+  D4: [I_MAT, R90, R180, R270, REF_X, REF_Y, REF_YEQX, REF_YEQNX],
+};
+
+// Big enough to enclose any plausible mm-scale cross-section.
+const B = 1e5;
+
+const REGIONS: Record<SymGroup, Outline> = {
+  D1: [
+    { x: 0, y: -B }, { x: B, y: -B }, { x: B, y: B }, { x: 0, y: B },
+  ],
+  D4: [
+    { x: 0, y: 0 }, { x: B, y: B }, { x: 0, y: B },
+  ],
+};
+
+// Closed-boundary point-in-canonical-region test. Used to filter circle
+// holes by their center.
+function inRegion(cx: number, cy: number, group: SymGroup): boolean {
+  if (group === "D1") return cx >= 0;
+  return cx >= 0 && cy >= cx;
 }
 
-function transformMP(mp: MultiPolygon, m: AffineMat): MultiPolygon {
-  const [a, b, c, d, e, f] = m;
+// Is this center invariant under every transform in `group`?
+function fixed(cx: number, cy: number, group: SymGroup): boolean {
+  if (group === "D1") return cx === 0;
+  return cx === 0 && cy === 0;
+}
+
+function applyToPoint(t: AffineMat, x: number, y: number): { x: number; y: number } {
+  return {
+    x: quantize(t[0] * x + t[1] * y + t[4]),
+    y: quantize(t[2] * x + t[3] * y + t[5]),
+  };
+}
+
+function transformMP(mp: MultiPolygon, t: AffineMat): MultiPolygon {
   return mp.map(poly => poly.map(ring =>
     ring.map(([x, y]): [number, number] => [
-      quantize(a * x + b * y + e),
-      quantize(c * x + d * y + f),
+      quantize(t[0] * x + t[1] * y + t[4]),
+      quantize(t[2] * x + t[3] * y + t[5]),
     ]),
   ));
 }
 
-// Clip the shape's filled region to `region` (if any), then form the union of
-// each transformed copy. Returns null when the result is empty. The output is
-// a polygon-kind AuthoringShape (circle identity is dissolved by the boolean
-// ops); the fast path preserves the input as-is when no work is requested.
-export function symCompose(
-  s: AuthoringShape,
-  region: Outline | null,
-  transforms: readonly AffineMat[],
-): AuthoringShape | null {
-  if (region === null && transforms.length === 1 && isIdentity(transforms[0]!)) {
-    return s;
+function clampToRegion(mp: MultiPolygon, group: SymGroup): MultiPolygon {
+  return polygonClipping.intersection(mp, [[outlineToRing(REGIONS[group])]]);
+}
+
+function orbitUnion(mp: MultiPolygon, group: SymGroup): MultiPolygon {
+  if (mp.length === 0) return mp;
+  const ts = TRANSFORMS[group];
+  if (ts.length === 1) return mp;
+  const parts = ts.map(t => transformMP(mp, t));
+  return polygonClipping.union(parts[0]!, ...parts.slice(1));
+}
+
+function dedupeCenters(pts: readonly { x: number; y: number }[]): { x: number; y: number }[] {
+  const seen = new Set<string>();
+  const out: { x: number; y: number }[] = [];
+  for (const p of pts) {
+    const key = `${p.x},${p.y}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(p);
   }
+  return out;
+}
 
-  let filled: MultiPolygon = polygonClipping.difference(
-    outerMultiPolygonOf(s),
-    holesMultiPolygon(s.holes),
-  );
+// Build a raw candidate AuthoringShape via per-primitive orbit emission.
+// Returns null when the outer drops to empty (e.g. polygon shape entirely
+// outside the canonical region). The candidate may have hole overlaps; the
+// caller threads it through `normalize`.
+function orbitEmit(s: AuthoringShape, group: SymGroup): AuthoringShape | null {
+  const ts = TRANSFORMS[group];
 
-  if (region) {
-    filled = polygonClipping.intersection(filled, [[outlineToRing(region)]]);
-    if (filled.length === 0) return null;
-  }
+  // ----- outer -----
+  let outerDisk: { cx: number; cy: number; r: number } | null = null;
+  let outerPolys: Outline[] = [];
+  let emergentHoles: Hole[] = [];
 
-  let unioned: MultiPolygon;
-  if (transforms.length === 0) {
-    unioned = filled;
+  if (s.kind === "disk" && fixed(s.cx, s.cy, group)) {
+    outerDisk = { cx: s.cx, cy: s.cy, r: s.r };
   } else {
-    const parts: MultiPolygon[] = transforms.map(t => isIdentity(t) ? filled : transformMP(filled, t));
-    unioned = parts.length === 1 ? parts[0]! : polygonClipping.union(parts[0]!, ...parts.slice(1));
+    const outerMP: MultiPolygon = s.kind === "disk"
+      ? [[ringFromCircle(s.cx, s.cy, s.r)]]
+      : outerMultiPolygonOf(s);
+    const clamped = clampToRegion(outerMP, group);
+    if (clamped.length === 0) return null;
+    const unioned = orbitUnion(clamped, group);
+    if (unioned.length === 0) return null;
+    const dec = decompose(unioned);
+    outerPolys = dec.outers;
+    emergentHoles = dec.holes;
   }
 
-  if (unioned.length === 0) return null;
-  const { outers, holes } = decompose(unioned);
-  if (outers.length === 0) return null;
-  return { kind: "polygon", outers, holes };
+  // ----- holes -----
+  const holes: Hole[] = [];
+  for (const h of s.holes) {
+    if (h.kind === "circle") {
+      // Center filter (binary, preserves circle identity).
+      if (!inRegion(h.cx, h.cy, group)) continue;
+      const centers = dedupeCenters(ts.map(t => applyToPoint(t, h.cx, h.cy)));
+      for (const c of centers) {
+        holes.push({ kind: "circle", cx: c.x, cy: c.y, r: h.r });
+      }
+    } else {
+      // Polygon hole: clamp + orbit-union; each piece becomes its own hole.
+      const holeMp: MultiPolygon = [[outlineToRing(h.outline)]];
+      const clamped = clampToRegion(holeMp, group);
+      if (clamped.length === 0) continue;
+      const unioned = orbitUnion(clamped, group);
+      const dec = decompose(unioned);
+      for (const outline of dec.outers) {
+        holes.push({ kind: "polygon", outline });
+      }
+    }
+  }
+
+  if (outerDisk) {
+    return { kind: "disk", cx: outerDisk.cx, cy: outerDisk.cy, r: outerDisk.r, holes };
+  }
+  return {
+    kind: "polygon",
+    outers: outerPolys,
+    holes: [...emergentHoles, ...holes],
+  };
+}
+
+// Identity short-circuit: if every primitive in s is fixed by the group AND
+// the outer is a disk-at-origin, the result is structurally identical to s.
+// Save the polygon-clipping work and return reference-equal.
+function isAlreadySymmetric(s: AuthoringShape, group: SymGroup): boolean {
+  if (s.kind !== "disk") return false;
+  if (!fixed(s.cx, s.cy, group)) return false;
+  for (const h of s.holes) {
+    if (h.kind === "circle") {
+      if (!fixed(h.cx, h.cy, group)) return false;
+    } else {
+      // Conservative: polygon holes go through orbit emission to be safe.
+      return false;
+    }
+  }
+  return true;
+}
+
+export function symCompose(s: AuthoringShape, group: SymGroup): SymComposeResult {
+  if (isAlreadySymmetric(s, group)) return { kind: "ok", shape: s };
+
+  const raw = orbitEmit(s, group);
+  if (raw === null) return { kind: "error", tag: "empties-shape" };
+  const n = normalize(raw, null);
+  const err = check(n.shape);
+  if (err) return { kind: "error", ...err };
+  if (n.warning) return { kind: "warning", shape: n.shape, ...n.warning };
+  return { kind: "ok", shape: n.shape };
+}
+
+// Polygons covering the *non*-canonical area within ±B. UI-side dim overlay
+// reads this so the visual aid stays in lockstep with the canonical region
+// definition above.
+export function dimRegionsOf(group: SymGroup): Outline[] {
+  if (group === "D1") {
+    return [[
+      { x: -B, y: -B }, { x: 0, y: -B }, { x: 0, y: B }, { x: -B, y: B },
+    ]];
+  }
+  return [
+    [{ x: -B, y: -B }, { x: B, y: -B }, { x: B, y: 0 }, { x: -B, y: 0 }],
+    [{ x: 0, y: 0 }, { x: B, y: 0 }, { x: B, y: B }],
+    [{ x: -B, y: 0 }, { x: 0, y: 0 }, { x: 0, y: B }, { x: -B, y: B }],
+  ];
 }

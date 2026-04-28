@@ -76,7 +76,7 @@ function build(base: AuthoringShape, op: Op): BuildResult {
 // produce a canonical, contract-valid shape. Walks each hole once, sorts
 // into {good, bad, dropped}, then re-derives the shape if anything moved.
 
-function normalize(s: AuthoringShape, preselect: Selection | null): {
+export function normalize(s: AuthoringShape, preselect: Selection | null): {
   shape: AuthoringShape; preselect: Selection | null; warning: WarnTag | null;
 } {
   const outerMP = outerMultiPolygonOf(s);
