@@ -15,7 +15,7 @@
 
 import { apply, compose } from "@geom/index.ts";
 import type {
-  ApplyResult, AuthoringShape, Op, Selection, Vec2,
+  ApplyResult, AuthoringShape, Op, Outline, Selection, Vec2,
 } from "@geom/index.ts";
 import { errorText, warnText } from "./error-text.ts";
 import {
@@ -80,6 +80,13 @@ export class Editor {
   private cursorWorld: Vec2 | null = null;
   private snap = true;
 
+  // Set by host workflows (e.g. symmetrize popup) to overlay a what-if shape
+  // and dim regions on the canvas without touching `this.shape`. Cleared when
+  // the workflow ends. Drag/tool gestures take precedence so live editing
+  // stays responsive if a preview is somehow stuck.
+  private previewShape: AuthoringShape | null = null;
+  private previewDim: Outline[] | null = null;
+
   constructor(canvas: HTMLCanvasElement, initial: AuthoringShape, cb: EditorCallbacks) {
     this.canvas = canvas;
     this.cb = cb;
@@ -138,6 +145,16 @@ export class Editor {
     if (this.tool) this.render();
   }
 
+  // Host-driven preview overlay (symmetrize popup, etc.). `s = null` clears
+  // the shape preview but `opts.dim` still applies if given — useful for
+  // hovering an invalid option where we want to show the dim region but
+  // leave the actual shape unchanged.
+  setPreviewShape(s: AuthoringShape | null, opts: { dim?: Outline[] | null } = {}): void {
+    this.previewShape = s;
+    this.previewDim = opts.dim ?? null;
+    this.render();
+  }
+
   setZeroState(shapes: SolverShape[] | null, onShape?: (idx: number) => void): void {
     this.animator.setZeroState(shapes, onShape);
   }
@@ -184,11 +201,14 @@ export class Editor {
         displayShape = r.shape;
         displayComposed = compose(displayShape);
       }
+    } else if (this.previewShape) {
+      displayShape = this.previewShape;
+      displayComposed = compose(this.previewShape);
     }
     this.updateStatus(status);
     this.handles = draw(
       this.canvas, this.view, displayShape, displayComposed, this.selection,
-      preview, this.dragCursor(),
+      preview, this.dragCursor(), this.previewDim,
     );
   }
 

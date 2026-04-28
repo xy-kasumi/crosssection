@@ -7,6 +7,7 @@ import { Editor } from "./editor.ts";
 import { SolverClient } from "@solver/client.ts";
 import { Readouts } from "./ui/readouts.ts";
 import { StartPane } from "./ui/start-pane.ts";
+import { SymmetrizePopup } from "./ui/symmetrize-popup.ts";
 import { Toolbar } from "./ui/toolbar.ts";
 import { CanvasStatus } from "./ui/canvas-status.ts";
 import { DebugPane } from "./ui/debug-pane.ts";
@@ -63,6 +64,7 @@ const toolbar      = new Toolbar({ editor });
 const canvasStatus = new CanvasStatus();
 const debugPane    = new DebugPane(editor);
 const zeroState    = new ZeroState({ editor, readouts });
+new SymmetrizePopup({ editor, onStatus: (s) => canvasStatus.setStatus(s) });
 
 let nextId = 1;
 let lastDisplayedId = 0;

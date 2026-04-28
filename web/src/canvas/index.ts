@@ -13,8 +13,9 @@
 //                          `ctx.setTransform(dpr,...)` know about this.
 
 import type { SolverShape } from "@solver/shape.ts";
-import type { AuthoringShape, Selection, Vec2 } from "@geom/index.ts";
+import type { AuthoringShape, Outline, Selection, Vec2 } from "@geom/index.ts";
 
+import { drawDimRegion } from "./dim.ts";
 import { drawGrid } from "./grid.ts";
 import { drawShape } from "./shape.ts";
 import { drawHandles, pushDiskHandles, pushHoleCircleHandles, pushOutlineHandles } from "./handles.ts";
@@ -107,6 +108,7 @@ export function draw(
   selection: Selection | null,
   toolPreview: ToolPreview | null = null,
   dragCursor: Vec2 | null = null,
+  dimRegions: readonly Outline[] | null = null,
 ): Handle[] {
   const ctx = canvas.getContext("2d");
   if (!ctx) return [];
@@ -115,6 +117,8 @@ export function draw(
   ctx.clearRect(0, 0, view.cssW, view.cssH);
 
   drawGrid(ctx, view);
+
+  if (dimRegions && dimRegions.length > 0) drawDimRegion(ctx, view, dimRegions);
 
   // Filled silhouette (the FEM-facing composed shape). Faded while a tool is
   // active so the new prim can sit visually on top without dissolving into
