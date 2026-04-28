@@ -8,7 +8,10 @@
 // Typing in the overlay updates the shape immediately; the grid refit is
 // debounced so it doesn't chase rapid keystrokes ("32" → "3" → "33").
 
-import { boxOf, extrusionOf, pipeOf, rectShapeOf, rodOf } from "@geom/index.ts";
+import {
+  boxOf, check, extrusionOf, pipeOf, rectShapeOf, rodOf,
+  type AuthoringShape,
+} from "@geom/index.ts";
 import type { Editor } from "../editor.ts";
 import { t } from "./i18n.ts";
 
@@ -98,20 +101,29 @@ export class StartPane {
     if (PRESET_FIELDS[preset].length > 0) this.showSizeInput(preset, vals);
   }
 
+  // Returns true iff the shape was valid and applied. Per-field `min` only
+  // validates each input independently — combinations like pipe D=1, T=2
+  // build a geometrically-invalid shape (inner radius < 0). `check` catches
+  // those; on failure we keep the previously-applied shape so the editor
+  // never holds something `compose()` can't process.
   private setShapeFromPreset(
     preset: Preset,
     vals: Record<string, number>,
     opts: { refit?: boolean } = {},
-  ): void {
+  ): boolean {
+    let s: AuthoringShape;
     switch (preset) {
-      case "rod":       this.editor.setShape(rodOf(vals.D!), opts); break;
-      case "pipe":      this.editor.setShape(pipeOf(vals.D!, vals.T!), opts); break;
-      case "rect":      this.editor.setShape(rectShapeOf(vals.W!, vals.H!), opts); break;
-      case "box":       this.editor.setShape(boxOf(vals.W!, vals.H!, vals.T!), opts); break;
-      case "extrusion": this.editor.setShape(extrusionOf(), opts); break;
+      case "rod":       s = rodOf(vals.D!); break;
+      case "pipe":      s = pipeOf(vals.D!, vals.T!); break;
+      case "rect":      s = rectShapeOf(vals.W!, vals.H!); break;
+      case "box":       s = boxOf(vals.W!, vals.H!, vals.T!); break;
+      case "extrusion": s = extrusionOf(); break;
     }
+    if (check(s) !== null) return false;
+    this.editor.setShape(s, opts);
     // Preset-driven shape changes don't count as user modification.
     this.userModified = false;
+    return true;
   }
 
   private showSizeInput(preset: Preset, initial: Record<string, number>): void {
@@ -149,7 +161,7 @@ export class StartPane {
         if (!isFinite(v) || v < fields[i]!.min) return;
         vals[fields[i]!.name] = v;
       }
-      this.setShapeFromPreset(preset, vals, { refit: false });
+      if (!this.setShapeFromPreset(preset, vals, { refit: false })) return;
       if (this.refitTimer !== null) clearTimeout(this.refitTimer);
       this.refitTimer = window.setTimeout(() => {
         this.refitTimer = null;
