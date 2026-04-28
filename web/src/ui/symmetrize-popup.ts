@@ -1,8 +1,13 @@
 // Symmetrize popup: parent toolbar button + 2 option buttons.
 //
-// Hover an option → live-preview the result on canvas (the editor's
-// preview-shape hook). Click → commit (editor.setShape(result)). Esc /
-// outside-click / popup close → cancel.
+// While the popup is open, a preview is always visible — the popup opens
+// with the first option's preview already drawn, and hovering swaps to a
+// different option. The preview persists until the popup closes, so the
+// user's eyes can rest on the canvas without the preview flickering when
+// the cursor moves between option buttons.
+//
+// Click → commit (editor.setShape(result)). Esc / outside-click / popup
+// close → cancel.
 //
 // The popup speaks directly to the editor's setShape / setPreviewShape
 // because Symmetrize is a wholesale shape replacement, not an Op. apply()'s
@@ -51,7 +56,6 @@ export class SymmetrizePopup {
       const spec = SYM_SPECS.find(s => s.kind === kind);
       if (!spec) continue;
       btn.addEventListener("mouseenter", () => this.preview(spec));
-      btn.addEventListener("mouseleave", () => this.maybeClearPreview());
       btn.addEventListener("click", (ev) => {
         ev.stopPropagation();
         this.commit(spec);
@@ -73,6 +77,9 @@ export class SymmetrizePopup {
     this.isOpen = true;
     this.parentBtn.classList.add("active");
     this.popupEl.hidden = false;
+    // Default-preview the first option so the realtime view is visible the
+    // moment the popup appears, before the user has to hover anything.
+    if (SYM_SPECS.length > 0) this.preview(SYM_SPECS[0]!);
   }
 
   private close(): void {
@@ -106,16 +113,6 @@ export class SymmetrizePopup {
       this.editor.setPreviewShape(result.shape, { dim });
     }
     this.current = { spec, result };
-  }
-
-  // Debounced clear: wait a tick so moving between option buttons doesn't
-  // briefly drop the preview.
-  private maybeClearPreview(): void {
-    setTimeout(() => {
-      if (!this.isOpen) return;
-      if (this.popupEl.matches(":hover") || this.parentBtn.matches(":hover")) return;
-      this.clearPreview();
-    }, 60);
   }
 
   private clearPreview(): void {
