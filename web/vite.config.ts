@@ -6,7 +6,10 @@ const here = dirname(fileURLToPath(import.meta.url));
 
 // Pyodide ships node-only files (e.g. fs/path requires) that vite tries to bundle.
 // We exclude pyodide from optimizeDeps and let it be loaded as a regular ESM.
-export default defineConfig({
+export default defineConfig(({ command }) => ({
+  // Local dev serves at /; production build is published to
+  // xy-kasumi.github.io/crosssection/ so assets need that prefix.
+  base: command === "build" ? "/crosssection/" : "/",
   resolve: {
     alias: {
       // The only thing web is allowed to import from solver at runtime is
@@ -30,4 +33,4 @@ export default defineConfig({
   worker: {
     format: "es",
   },
-});
+}));
