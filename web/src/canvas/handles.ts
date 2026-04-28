@@ -30,7 +30,7 @@ export function drawHandles(ctx: CanvasRenderingContext2D, view: View, handles: 
     const s = worldToScreen(view, h.x, h.y);
     ctx.beginPath();
     ctx.arc(s.sx, s.sy, HANDLE_RADIUS_PX, 0, Math.PI * 2);
-    ctx.fillStyle = "rgb(80, 130, 230)";
+    ctx.fillStyle = "rgb(60, 150, 200)";
     ctx.fill();
     ctx.strokeStyle = "white";
     ctx.lineWidth = 1.5;

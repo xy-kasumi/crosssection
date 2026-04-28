@@ -4,6 +4,9 @@
 :root {
   color-scheme: light dark;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  /* Secondary face for technical chrome (tool labels, status, kbd, units,
+     wordmark). Big readout numbers stay proportional. */
+  --ff-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 
   /* spacing — used for both gap and padding */
   --gap-tight:    4px;
@@ -33,9 +36,9 @@
   --surface-muted:    #fafafa;
   --surface-overlay:  rgba(255,255,255,0.92);
   --hover-tint:       rgba(127,127,127,0.08);
-  --accent:           rgb(80,130,230);
-  --accent-tint:      rgba(80,130,230,0.18);
-  --accent-tint-soft: rgba(80,130,230,0.15);
+  --accent:           rgb(60,150,200);
+  --accent-tint:      rgba(60,150,200,0.18);
+  --accent-tint-soft: rgba(60,150,200,0.15);
   --danger:           #c33;
 }
 @media (prefers-color-scheme: dark) {
@@ -67,7 +70,7 @@ body { margin: 0; padding: 0; min-height: 100vh; }
 
 main {
   display: grid;
-  grid-template-columns: 220px minmax(320px, 1fr);
+  grid-template-columns: 220px minmax(320px, 1fr) 140px;
   gap: var(--pad-page);
   padding: var(--pad-page);
   align-items: stretch;
@@ -144,6 +147,7 @@ main {
   background: transparent;
   border: 0;
   font: inherit;
+  font-family: var(--ff-mono);
   font-size: var(--fs-caption);
   font-weight: 600;
   letter-spacing: 0.04em;
@@ -154,12 +158,22 @@ main {
   opacity: 0.7;
 }
 .section-toggle:hover { opacity: 1; }
+/* Drawn from two thin borders — lighter visual weight than ▾ at small sizes,
+   which read as speckle. Default points down (open); rotates -90° to point
+   right when the section is collapsed. */
 .section-toggle .chevron {
-  font-size: var(--fs-meta);
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: translateY(-2px) rotate(45deg);
   transition: transform 0.2s ease;
-  opacity: 0.7;
+  opacity: 0.55;
 }
-.left-section.collapsed .section-toggle .chevron { transform: rotate(-90deg); }
+.left-section.collapsed .section-toggle .chevron {
+  transform: translateY(-1px) rotate(-45deg);
+}
 
 .section-body {
   overflow: hidden;
@@ -186,6 +200,7 @@ main {
 .start-row-label {
   flex-shrink: 0;
   width: 48px;
+  font-family: var(--ff-mono);
   font-size: var(--fs-ui);
   opacity: 0.75;
   display: flex;
@@ -210,7 +225,7 @@ main {
   font-size: 16px;
   line-height: 1;
 }
-.start-tag { opacity: 0.75; }
+.start-tag { opacity: 0.75; font-family: var(--ff-mono); }
 
 .results-section {
   margin-top: auto;        /* push readouts to the bottom of the left column */
@@ -233,7 +248,7 @@ main {
   border: 1px solid var(--border);
   border-radius: var(--radius-card);
 }
-.readout-label { font-size: var(--fs-label); font-weight: 600; }
+.readout-label { font-family: var(--ff-mono); font-size: var(--fs-label); font-weight: 600; }
 .readout-val {
   font-size: var(--fs-numeric);
   font-variant-numeric: tabular-nums;
@@ -242,7 +257,7 @@ main {
 }
 .readout-val.computing { opacity: 0.18; }
 .readout-val.invalid   { color: var(--danger); opacity: 0.85; }
-.readout-unit { font-size: var(--fs-caption); opacity: 0.6; }
+.readout-unit { font-family: var(--ff-mono); font-size: var(--fs-caption); opacity: 0.6; }
 
 .status {
   font-size: var(--fs-caption);
@@ -264,6 +279,9 @@ main {
   justify-content: center;
   margin-top: auto;
   padding-top: var(--gap-snug);
+  /* Aligns the button's bottom with canvas-wrap's bottom; canvas-col adds a
+     gap-snug + a 1.4em-tall canvas-status strip below the canvas. */
+  margin-bottom: calc(11px * 1.4 + var(--gap-snug));
 }
 .lang-switch-btn {
   display: inline-flex;
@@ -273,6 +291,7 @@ main {
   background: transparent;
   border: 0;
   font: inherit;
+  font-family: var(--ff-mono);
   font-size: var(--fs-meta);
   color: inherit;
   opacity: 0.55;
@@ -290,20 +309,45 @@ main {
   flex-direction: column;
   gap: var(--gap-snug);
   align-items: center;
-  justify-self: center;
   width: 100%;
   max-width: 560px;
 }
+
+/* ---------- right column: wordmark + credit + source link ---------- */
+
+.right-col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-loose);
+  margin: 0;
+  font-family: var(--ff-mono);
+  font-size: var(--fs-meta);
+}
+.wordmark {
+  font-size: var(--fs-body);
+  letter-spacing: 0.06em;
+  opacity: 0.75;
+}
+.right-meta {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-tight);
+}
+.meta-link {
+  color: inherit;
+  text-decoration: none;
+  opacity: 0.55;
+  transition: opacity 0.15s;
+}
+.meta-link:hover { opacity: 1; }
 
 .canvas-toolbar {
   display: flex;
   align-items: center;
   gap: var(--gap-snug);
   width: 100%;
-  padding: var(--gap-snug);
-  background: var(--surface-muted);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-surface);
+  padding: var(--gap-snug) 0;
+  border-bottom: 1px solid var(--border);
   font-size: var(--fs-ui);
 }
 .tool-btn {
@@ -373,7 +417,7 @@ main {
 .snap-toggle input { margin: 0; cursor: pointer; }
 
 .kbd-hint {
-  font-family: ui-monospace, SFMono-Regular, monospace;
+  font-family: var(--ff-mono);
   font-size: var(--fs-meta);
   padding: 1px 5px;
   border: 1px solid var(--border-strong);
@@ -383,22 +427,15 @@ main {
 
 .canvas-wrap {
   position: relative;
-  display: grid;
-  place-items: center;
   background: var(--surface-muted);
   border: 1px solid var(--border);
   border-radius: var(--radius-surface);
-  padding: var(--gap-loose);
-  aspect-ratio: 1 / 1;
-  max-width: 560px;
-  max-height: 560px;
-  width: 100%;
+  width: fit-content;
 }
 canvas {
-  width: 100%;
-  height: 100%;
-  max-width: 480px;
-  max-height: 480px;
+  display: block;
+  width: 480px;
+  height: 480px;
   cursor: crosshair;
   user-select: none;
 }
@@ -435,6 +472,7 @@ canvas {
   width: 100%;
   min-height: 1.4em;
   padding: 0 var(--gap-tight);
+  font-family: var(--ff-mono);
   font-size: var(--fs-meta);
   opacity: 0.6;
   white-space: nowrap;

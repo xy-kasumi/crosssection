@@ -161,7 +161,7 @@ export function draw(
     const s = worldToScreen(view, dragCursor.x, dragCursor.y);
     ctx.beginPath();
     ctx.arc(s.sx, s.sy, 3, 0, Math.PI * 2);
-    ctx.fillStyle = "rgb(80, 130, 230)";
+    ctx.fillStyle = "rgb(60, 150, 200)";
     ctx.fill();
   }
 

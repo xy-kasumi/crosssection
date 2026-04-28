@@ -27,12 +27,18 @@ export function drawGrid(ctx: CanvasRenderingContext2D, view: View): void {
   const majorEvery = 5;
   const showMajor = minorN > majorEvery;
 
+  // Grid lines extend to the canvas edges (so the canvas isn't framed by
+  // bare margin), independent of `halfSpan`'s `FIT_MARGIN`-padded data
+  // area. Tick *labels* still cap at minorN below — labels past the data
+  // area would just be clutter.
+  const lineN = Math.ceil(Math.max(cssW, cssH) / 2 / scale / unit);
+
   const minorXs: number[] = [];
   const minorYs: number[] = [];
   const majorXs: number[] = [];
   const majorYs: number[] = [];
 
-  for (let i = -minorN; i <= minorN; i++) {
+  for (let i = -lineN; i <= lineN; i++) {
     if (i === 0) continue; // axes drawn separately at higher contrast
     const w = i * unit;
     const sx = offsetX + w * scale;

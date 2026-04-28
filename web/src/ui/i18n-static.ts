@@ -37,6 +37,10 @@ const ENTRIES: Entry[] = [
   // Snap-to-grid checkbox label (label wraps the input + spans; the visible
   // text span is the one without a child <input> — index second).
   { sel: ".snap-toggle span:not(.kbd-hint)",                     en: "Snap to grid", ja: "グリッド吸着" },
+
+  // Right-strip wordmark — per-locale. Credit (夕月霞) and source link stay
+  // language-neutral; they are not in this map.
+  { sel: "#wordmark",                                            en: "crosssection", ja: "断面形状" },
 ];
 
 export function applyStaticLabels(): void {
