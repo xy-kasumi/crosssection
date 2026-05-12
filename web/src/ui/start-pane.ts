@@ -9,13 +9,13 @@
 // debounced so it doesn't chase rapid keystrokes ("32" → "3" → "33").
 
 import {
-  boxOf, check, extrusionOf, pipeOf, rectShapeOf, rodOf,
+  boxOf, check, extrusion2040Of, extrusionOf, pipeOf, rectShapeOf, rodOf,
   type AuthoringShape,
 } from "@geom/index.ts";
 import type { Editor } from "../editor.ts";
 import { t } from "./i18n.ts";
 
-type Preset = "rod" | "pipe" | "rect" | "box" | "extrusion";
+type Preset = "rod" | "pipe" | "rect" | "box" | "extrusion" | "extrusion2040";
 type FieldDef = { name: string; label: string; min: number; step: number };
 
 // Floor for initial-size dimensions. 0.02 mm is the smallest the editor
@@ -34,13 +34,15 @@ const PRESET_FIELDS: Record<Preset, FieldDef[]> = {
               { name: "H", label: "H", min: MIN_INITIAL_DIM, step: 0.5 },
               { name: "T", label: "T", min: MIN_INITIAL_DIM, step: 0.2 }],
   extrusion: [],
+  extrusion2040: [],
 };
 const PRESET_DEFAULTS: Record<Preset, Record<string, number>> = {
-  rod:       { D: 5 },
-  pipe:      { D: 12, T: 2 },
-  rect:      { W: 20, H: 5 },
-  box:       { W: 20, H: 20, T: 2 },
-  extrusion: {},
+  rod:           { D: 5 },
+  pipe:          { D: 12, T: 2 },
+  rect:          { W: 20, H: 5 },
+  box:           { W: 20, H: 20, T: 2 },
+  extrusion:     {},
+  extrusion2040: {},
 };
 
 const SIZE_INPUT_REFIT_DEBOUNCE_MS = 350;
@@ -117,7 +119,8 @@ export class StartPane {
       case "pipe":      s = pipeOf(vals.D!, vals.T!); break;
       case "rect":      s = rectShapeOf(vals.W!, vals.H!); break;
       case "box":       s = boxOf(vals.W!, vals.H!, vals.T!); break;
-      case "extrusion": s = extrusionOf(); break;
+      case "extrusion":     s = extrusionOf(); break;
+      case "extrusion2040": s = extrusion2040Of(); break;
     }
     if (check(s) !== null) return false;
     this.editor.setShape(s, opts);

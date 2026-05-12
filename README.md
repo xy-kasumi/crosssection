@@ -57,6 +57,11 @@ npm run dev         # vite dev server at http://localhost:5173/
 
 On first load, a muted carousel of demo cross-sections plays in the canvas while Pyodide boots. Click **Rod / Rectangle / Extrusion** in the left pane to enter the editor; a small W/H/S/D form appears over the canvas — type values, Enter confirms. Use **Paint Rect / Erase Rect / Add Hole** in the toolbar to compose; **Space** toggles snap-to-grid. Right-click a vertex to delete it; click an empty edge handle to insert one. The status strip below the canvas surfaces tool hints, amber warnings, and red errors. The three readouts update after every edit; "computing…" fade indicates a solve in flight.
 
+### Add a preset
+
+Author the shape in the editor, run `__editor.dumpShape()` in devtools (logs JSON, best-effort clipboard),
+then paste into `geom/presets.ts` or `web/src/canvas/zero-state.ts`.
+
 ### Build the browser UI
 
 ```bash

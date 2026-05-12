@@ -50,6 +50,41 @@ export function extrusionOf(): PolygonShape {
       { x:  -8, y:   6 }, { x:  -7, y:   6 }, { x:  -4, y:   3 }, { x:  -4, y:  -3 },
       { x:  -7, y:  -6 }, { x:  -8, y:  -6 }, { x:  -8, y:  -3 }, { x: -10, y:  -3 },
     ]],
-    holes: [{ kind: "circle", cx: 0, cy: 0, r: 2.195 }],
+    holes: [{ kind: "circle", cx: 0, cy: 0, r: 2.1 }],
+  };
+}
+
+// 20×40 T-slot extrusion profile, centered. Hand-authored snapshot — no
+// parameters; replace the literal to retune the geometry.
+export function extrusion2040Of(): PolygonShape {
+  return {
+    kind: "polygon",
+    outers: [[
+      { x: -10, y: -20 }, { x:  -3, y: -20 }, { x:  -3, y: -18 }, { x:  -6, y: -18 },
+      { x:  -6, y: -17 }, { x:  -3, y: -14 }, { x:   3, y: -14 }, { x:   6, y: -17 },
+      { x:   6, y: -18 }, { x:   3, y: -18 }, { x:   3, y: -20 }, { x:  10, y: -20 },
+      { x:  10, y: -13 }, { x:   8, y: -13 }, { x:   8, y: -16 }, { x:   7, y: -16 },
+      { x:   4, y: -13 }, { x:   4, y:  -7 }, { x:   7, y:  -4 }, { x:   8, y:  -4 },
+      { x:   8, y:  -7 }, { x:  10, y:  -7 }, { x:  10, y:   7 }, { x:   8, y:   7 },
+      { x:   8, y:   4 }, { x:   7, y:   4 }, { x:   4, y:   7 }, { x:   4, y:  13 },
+      { x:   7, y:  16 }, { x:   8, y:  16 }, { x:   8, y:  13 }, { x:  10, y:  13 },
+      { x:  10, y:  20 }, { x:   3, y:  20 }, { x:   3, y:  18 }, { x:   6, y:  18 },
+      { x:   6, y:  17 }, { x:   3, y:  14 }, { x:  -3, y:  14 }, { x:  -6, y:  17 },
+      { x:  -6, y:  18 }, { x:  -3, y:  18 }, { x:  -3, y:  20 }, { x: -10, y:  20 },
+      { x: -10, y:  13 }, { x:  -8, y:  13 }, { x:  -8, y:  16 }, { x:  -7, y:  16 },
+      { x:  -4, y:  13 }, { x:  -4, y:   7 }, { x:  -7, y:   4 }, { x:  -8, y:   4 },
+      { x:  -8, y:   7 }, { x: -10, y:   7 }, { x: -10, y:  -7 }, { x:  -8, y:  -7 },
+      { x:  -8, y:  -4 }, { x:  -7, y:  -4 }, { x:  -4, y:  -7 }, { x:  -4, y: -13 },
+      { x:  -7, y: -16 }, { x:  -8, y: -16 }, { x:  -8, y: -13 }, { x: -10, y: -13 },
+    ]],
+    holes: [
+      { kind: "polygon", outline: [
+        { x: -8, y: -2 }, { x: -7, y: -2 }, { x: -3, y: -6 }, { x:  3, y: -6 },
+        { x:  7, y: -2 }, { x:  8, y: -2 }, { x:  8, y:  2 }, { x:  7, y:  2 },
+        { x:  3, y:  6 }, { x: -3, y:  6 }, { x: -7, y:  2 }, { x: -8, y:  2 },
+      ]},
+      { kind: "circle", cx: 0, cy: -10, r: 2.1 },
+      { kind: "circle", cx: 0, cy:  10, r: 2.1 },
+    ],
   };
 }

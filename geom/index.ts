@@ -34,6 +34,7 @@ export {
   rectShapeOf,
   boxOf,
   extrusionOf,
+  extrusion2040Of,
 } from "./presets.ts";
 
 export { rectOutline } from "./internal.ts";
