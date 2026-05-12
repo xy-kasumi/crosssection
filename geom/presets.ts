@@ -34,7 +34,7 @@ export function boxOf(W: number, H: number, T: number): PolygonShape {
 
 // 20×20 T-slot extrusion profile, centered. Hand-authored snapshot — no
 // parameters; replace the literal to retune the geometry.
-export function extrusionOf(): PolygonShape {
+export function extrusion2020Of(): PolygonShape {
   return {
     kind: "polygon",
     outers: [[

@@ -9,13 +9,13 @@
 // debounced so it doesn't chase rapid keystrokes ("32" → "3" → "33").
 
 import {
-  boxOf, check, extrusion2040Of, extrusionOf, pipeOf, rectShapeOf, rodOf,
+  boxOf, check, extrusion2020Of, extrusion2040Of, pipeOf, rectShapeOf, rodOf,
   type AuthoringShape,
 } from "@geom/index.ts";
 import type { Editor } from "../editor.ts";
 import { t } from "./i18n.ts";
 
-type Preset = "rod" | "pipe" | "rect" | "box" | "extrusion" | "extrusion2040";
+type Preset = "rod" | "pipe" | "rect" | "box" | "extrusion2020" | "extrusion2040";
 type FieldDef = { name: string; label: string; min: number; step: number };
 
 // Floor for initial-size dimensions. 0.02 mm is the smallest the editor
@@ -33,7 +33,7 @@ const PRESET_FIELDS: Record<Preset, FieldDef[]> = {
   box:       [{ name: "W", label: "W", min: MIN_INITIAL_DIM, step: 0.5 },
               { name: "H", label: "H", min: MIN_INITIAL_DIM, step: 0.5 },
               { name: "T", label: "T", min: MIN_INITIAL_DIM, step: 0.2 }],
-  extrusion: [],
+  extrusion2020: [],
   extrusion2040: [],
 };
 const PRESET_DEFAULTS: Record<Preset, Record<string, number>> = {
@@ -41,7 +41,7 @@ const PRESET_DEFAULTS: Record<Preset, Record<string, number>> = {
   pipe:          { D: 12, T: 2 },
   rect:          { W: 20, H: 5 },
   box:           { W: 20, H: 20, T: 2 },
-  extrusion:     {},
+  extrusion2020: {},
   extrusion2040: {},
 };
 
@@ -119,7 +119,7 @@ export class StartPane {
       case "pipe":      s = pipeOf(vals.D!, vals.T!); break;
       case "rect":      s = rectShapeOf(vals.W!, vals.H!); break;
       case "box":       s = boxOf(vals.W!, vals.H!, vals.T!); break;
-      case "extrusion":     s = extrusionOf(); break;
+      case "extrusion2020": s = extrusion2020Of(); break;
       case "extrusion2040": s = extrusion2040Of(); break;
     }
     if (check(s) !== null) return false;

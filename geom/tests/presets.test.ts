@@ -4,7 +4,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import { check } from "../shape.ts";
-import { boxOf, defaultDisk, extrusionOf, pipeOf, rectShapeOf, rodOf } from "../presets.ts";
+import { boxOf, defaultDisk, extrusion2020Of, extrusion2040Of, pipeOf, rectShapeOf, rodOf } from "../presets.ts";
 
 test("defaultDisk is valid", () => {
   assert.equal(check(defaultDisk()), null);
@@ -48,11 +48,22 @@ test("boxOf(W, H, T) returns a polygon with one rect outer and one rect hole, va
   assert.equal(check(s), null);
 });
 
-test("extrusionOf returns a hand-authored T-slot polygon with a circular hole, valid", () => {
-  const s = extrusionOf();
+test("extrusion2020Of returns a hand-authored T-slot polygon with a circular hole, valid", () => {
+  const s = extrusion2020Of();
   assert.equal(s.kind, "polygon");
   assert.equal(s.outers.length, 1);
   assert.equal(s.holes.length, 1);
   assert.equal(s.holes[0]?.kind, "circle");
+  assert.equal(check(s), null);
+});
+
+test("extrusion2040Of returns a hand-authored T-slot polygon with one polygon + two circular holes, valid", () => {
+  const s = extrusion2040Of();
+  assert.equal(s.kind, "polygon");
+  assert.equal(s.outers.length, 1);
+  assert.equal(s.holes.length, 3);
+  assert.equal(s.holes[0]?.kind, "polygon");
+  assert.equal(s.holes[1]?.kind, "circle");
+  assert.equal(s.holes[2]?.kind, "circle");
   assert.equal(check(s), null);
 });

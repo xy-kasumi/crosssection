@@ -5,7 +5,7 @@
 
 import { compute } from "../compute.ts";
 import { rectangle, hollowCircle, equilateralTriangle } from "../presets.ts";
-import { extrusionOf, compose } from "../../geom/index.ts";
+import { extrusion2020Of, compose } from "../../geom/index.ts";
 import * as cf from "./closed-form.ts";
 import type { SolverShape } from "../shape.ts";
 import { ringSignedArea, sharpCornerCount } from "../shape.ts";
@@ -26,7 +26,7 @@ function totalArea(s: SolverShape): number {
   return a;
 }
 
-const extrusion = compose(extrusionOf());
+const extrusion = compose(extrusion2020Of());
 
 const probes: Probe[] = [
   {

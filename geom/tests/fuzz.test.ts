@@ -22,7 +22,7 @@ import {
   type AuthoringShape, type Op, type Selection, type SymGroup, type Vec2,
 } from "../index.ts";
 import {
-  defaultDisk, rodOf, pipeOf, rectShapeOf, boxOf, extrusionOf,
+  defaultDisk, rodOf, pipeOf, rectShapeOf, boxOf, extrusion2020Of, extrusion2040Of,
 } from "../presets.ts";
 
 // ---------- PRNG ----------
@@ -54,7 +54,8 @@ const PRESETS: PresetEntry[] = [
   { name: "pipeOf(12,2)",    make: () => pipeOf(12, 2) },
   { name: "rectShapeOf(20,5)", make: () => rectShapeOf(20, 5) },
   { name: "boxOf(20,20,2)",  make: () => boxOf(20, 20, 2) },
-  { name: "extrusionOf()",   make: () => extrusionOf() },
+  { name: "extrusion2020Of()", make: () => extrusion2020Of() },
+  { name: "extrusion2040Of()", make: () => extrusion2040Of() },
 ];
 
 // ---------- coordinate / scalar generation ----------

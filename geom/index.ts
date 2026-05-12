@@ -33,7 +33,7 @@ export {
   pipeOf,
   rectShapeOf,
   boxOf,
-  extrusionOf,
+  extrusion2020Of,
   extrusion2040Of,
 } from "./presets.ts";
 

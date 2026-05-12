@@ -8,7 +8,7 @@
 // from). Exit happens on the first preset click and is one-way.
 
 import {
-  compose, extrusionOf, rodOf,
+  compose, extrusion2020Of, rodOf,
   type AuthoringShape,
 } from "@geom/index.ts";
 import type { SolverShape } from "@solver/shape.ts";
@@ -89,8 +89,8 @@ function buildDemoEntries(): DemoEntry[] {
     },
     182, 2900, 3400, 3100,
   );
-  // 4. 20×20 T-slot extrusion (hand-authored profile, see extrusionOf).
+  // 4. 20×20 T-slot extrusion (hand-authored profile, see extrusion2020Of).
   //    A, Ix, Iy, J are precomputed numeric constants for this fixed shape.
-  push(extrusionOf(), 181, 7500, 7500, 810);
+  push(extrusion2020Of(), 181, 7500, 7500, 810);
   return out;
 }
